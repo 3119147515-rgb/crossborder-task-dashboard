@@ -18,16 +18,38 @@ export function LoginPage() {
     setLoading(true);
     setMessage("");
     const supabase = getSupabase();
-    const result =
-      mode === "login"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
-    setLoading(false);
-    if (result.error) {
-      setMessage(result.error.message);
-      return;
+    try {
+      const normalizedEmail = email.trim();
+      if (mode === "login") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
+        if (error) {
+          setMessage(error.message);
+          return;
+        }
+        setMessage("登录成功");
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+      });
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      if (data.session) {
+        await supabase.auth.signOut();
+      }
+      setMode("login");
+      setMessage("注册成功，请返回登录。");
+    } finally {
+      setLoading(false);
     }
-    setMessage(mode === "signup" ? "注册成功，请按 Supabase 邮箱确认设置完成后登录。" : "登录成功");
   }
 
   return (
