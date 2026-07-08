@@ -57,6 +57,54 @@ const sidebarItems: Array<{ key: NavKey; label: string; icon: typeof LayoutDashb
   { key: "review", label: "数据复盘", icon: PieChart },
 ];
 
+const viewCopy: Record<NavKey, { title: string; eyebrow: string; description: string }> = {
+  overview: {
+    title: "运营驾驶舱",
+    eyebrow: "Operations cockpit",
+    description: "聚合任务状态、风险、优先级和推进效率，帮助管理层快速判断今天该盯哪里。",
+  },
+  today: {
+    title: "今日工作台",
+    eyebrow: "Today desk",
+    description: "聚焦高优先级、本周到期、进行中和待确认任务，帮助团队明确今天先处理什么。",
+  },
+  TikTok: {
+    title: "TikTok 运营推进",
+    eyebrow: "TikTok board",
+    description: "只查看 TikTok 渠道任务、风险、卡点和模块推进情况。",
+  },
+  Amazon: {
+    title: "Amazon 运营推进",
+    eyebrow: "Amazon board",
+    description: "只查看 Amazon 渠道任务、风险、卡点和模块推进情况。",
+  },
+  独立站: {
+    title: "独立站运营推进",
+    eyebrow: "DTC board",
+    description: "只查看独立站渠道任务、风险、卡点和模块推进情况。",
+  },
+  owners: {
+    title: "负责人推进情况",
+    eyebrow: "Owner workload",
+    description: "按负责人角色查看任务压力、完成率和需要支持的卡点。",
+  },
+  blockers: {
+    title: "当前卡点任务",
+    eyebrow: "Blocker focus",
+    description: "只显示 blocker 不为空的任务，优先识别需要资源或管理层介入的推进阻塞。",
+  },
+  overdue: {
+    title: "逾期任务",
+    eyebrow: "Overdue focus",
+    description: "只显示已超过截止日期且尚未完成的任务，帮助团队快速拉齐责任人和闭环动作。",
+  },
+  review: {
+    title: "数据复盘",
+    eyebrow: "Review desk",
+    description: "聚合数据复盘、内容复盘、效果复盘相关任务，沉淀平台推进结论。",
+  },
+};
+
 const platformAccent: Record<Platform, { dot: string; bar: string; soft: string; text: string }> = {
   TikTok: { dot: "bg-pink-500", bar: "bg-pink-500", soft: "bg-pink-50", text: "text-pink-700" },
   Amazon: { dot: "bg-orange-500", bar: "bg-orange-500", soft: "bg-orange-50", text: "text-orange-700" },
@@ -194,13 +242,24 @@ export function Dashboard({ session }: { session: Session }) {
       return;
     }
     if (key === "review") {
-      setFilters({ ...defaultFilters, businessModule: "数据复盘" });
+      setFilters(defaultFilters);
+      setExecutionView("status");
       return;
     }
     setFilters(defaultFilters);
   }
 
   const groupItems = getGroupItems(executionView, filteredTasks);
+  const view = viewCopy[activeNav];
+  const isPlatformView = isPlatformNav(activeNav);
+  const scopedTasks = isPlatformView ? tasks.filter((task) => task.platform === activeNav) : filteredTasks;
+  const activeViewMetrics = createMetrics(filteredTasks);
+  const showOverview = activeNav === "overview";
+  const showToday = activeNav === "overview" || activeNav === "today";
+  const showPlatformBoard = activeNav === "overview" || isPlatformView;
+  const showOwnerWorkload = activeNav === "overview" || activeNav === "owners";
+  const showVisualInsights = activeNav === "overview" || activeNav === "review";
+  const platformBoardItems = isPlatformView ? [activeNav] : platforms;
 
   return (
     <main className="min-h-screen bg-[#F6F7F9] text-[#111827]">
@@ -208,29 +267,34 @@ export function Dashboard({ session }: { session: Session }) {
       <div className="mx-auto flex max-w-[1840px] gap-5 px-4 py-5 lg:px-6">
         <ExecutiveSidebar activeNav={activeNav} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onSelect={selectNav} />
         <section className="min-w-0 flex-1 space-y-5">
-          <section className="grid gap-4 xl:grid-cols-[1.65fr_1fr]">
-            <div className="space-y-4">
-              <SectionTitle eyebrow="Operations cockpit" title="运营驾驶舱" description="聚合任务状态、风险、优先级和推进效率，帮助管理层快速判断今天该盯哪里。" />
-              <MetricGrid metrics={metrics} />
-            </div>
-            <ProjectHealth metrics={metrics} />
-          </section>
+          <ViewHero view={view} activeNav={activeNav} visibleCount={filteredTasks.length} totalCount={tasks.length} metrics={activeViewMetrics} />
 
-          <TodayWorkbench tasks={tasks} onEdit={openEdit} onOpen={setSelectedTask} />
+          {showOverview ? (
+            <section className="grid gap-4 xl:grid-cols-[1.65fr_1fr]">
+              <div className="space-y-4">
+                <MetricGrid metrics={metrics} />
+              </div>
+              <ProjectHealth metrics={metrics} />
+            </section>
+          ) : null}
 
-          <section className="grid gap-5 2xl:grid-cols-[1.35fr_1fr]">
-            <div className="space-y-5">
-              <PlatformBoard tasks={tasks} onPlatformAdd={openAdd} />
-              <OwnerWorkload tasks={tasks} />
-            </div>
-            <VisualInsights tasks={tasks} />
-          </section>
+          {showToday ? <TodayWorkbench tasks={showOverview ? tasks : filteredTasks} onEdit={openEdit} onOpen={setSelectedTask} /> : null}
+
+          {showPlatformBoard || showOwnerWorkload || showVisualInsights ? (
+            <section className="grid gap-5 2xl:grid-cols-[1.35fr_1fr]">
+              <div className="space-y-5">
+                {showPlatformBoard ? <PlatformBoard tasks={scopedTasks} platformsToShow={platformBoardItems} onPlatformAdd={openAdd} /> : null}
+                {showOwnerWorkload ? <OwnerWorkload tasks={showOverview ? tasks : filteredTasks} /> : null}
+              </div>
+              {showVisualInsights ? <VisualInsights tasks={showOverview ? tasks : filteredTasks} /> : null}
+            </section>
+          ) : null}
 
           <Card className="overflow-hidden border-slate-200 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
             <div className="border-b border-slate-200 bg-white px-4 py-4 lg:px-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
-                  <SectionTitle eyebrow="Execution center" title="任务执行区" description="集中完成筛选、快速推进、状态更新和任务细节确认。" compact />
+                  <SectionTitle eyebrow="Execution center" title="任务执行区" description={getExecutionDescription(activeNav, filteredTasks.length)} compact />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {[
@@ -365,6 +429,37 @@ function SectionTitle({ eyebrow, title, description, compact = false }: { eyebro
       <h2 className={cn("font-semibold text-slate-950", compact ? "mt-1 text-lg" : "mt-1 text-2xl")}>{title}</h2>
       <p className="mt-1 text-sm text-slate-500">{description}</p>
     </div>
+  );
+}
+
+function ViewHero({
+  view,
+  activeNav,
+  visibleCount,
+  totalCount,
+  metrics,
+}: {
+  view: { title: string; eyebrow: string; description: string };
+  activeNav: NavKey;
+  visibleCount: number;
+  totalCount: number;
+  metrics: ReturnType<typeof createMetrics>;
+}) {
+  const isRiskView = activeNav === "blockers" || activeNav === "overdue";
+  const isReviewView = activeNav === "review";
+
+  return (
+    <Card className="border-slate-200 bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <SectionTitle eyebrow={view.eyebrow} title={view.title} description={view.description} />
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          <MiniStat label="当前任务" value={visibleCount} danger={isRiskView && visibleCount > 0} />
+          <MiniStat label="全部任务" value={totalCount} />
+          {isRiskView ? <MiniStat label={activeNav === "blockers" ? "卡点数量" : "逾期数量"} value={visibleCount} danger={visibleCount > 0} /> : null}
+          {isReviewView ? <MiniStat label="完成率" value={`${metrics.completionRate}%`} /> : null}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -518,12 +613,12 @@ function CompactTaskItem({ task, onEdit, onOpen }: { task: Task; onEdit: (task: 
   );
 }
 
-function PlatformBoard({ tasks, onPlatformAdd }: { tasks: Task[]; onPlatformAdd: (platform: Platform) => void }) {
+function PlatformBoard({ tasks, platformsToShow = platforms, onPlatformAdd }: { tasks: Task[]; platformsToShow?: readonly Platform[]; onPlatformAdd: (platform: Platform) => void }) {
   return (
     <section className="space-y-4">
       <SectionTitle eyebrow="Platform board" title="平台推进看板" description="对比 TikTok、Amazon、独立站推进速度、风险和模块分布。" />
       <div className="grid gap-4 xl:grid-cols-3">
-        {platforms.map((platform) => {
+        {platformsToShow.map((platform) => {
           const stats = createPlatformStats(tasks, platform);
           const accent = platformAccent[platform];
           return (
@@ -745,7 +840,10 @@ function createPlatformStats(tasks: Task[], platform: Platform) {
 }
 
 function getGroupItems(view: ExecutionView, tasks: Task[]) {
-  if (view === "platform") return [...platforms];
+  if (view === "platform") {
+    const presentPlatforms = platforms.filter((platform) => tasks.some((task) => task.platform === platform));
+    return presentPlatforms.length ? presentPlatforms : [...platforms];
+  }
   if (view === "role") return [...roles];
   const values = Array.from(new Set(tasks.map((task) => view === "status" ? task.status : task.priority)));
   return values.length ? values : view === "status" ? ["未开始", "进行中", "待确认", "已完成", "已暂停"] : ["高", "中", "低"];
@@ -758,24 +856,42 @@ function belongsToGroup(task: Task, view: ExecutionView, group: string) {
   return task.priority === group;
 }
 
+function isPlatformNav(nav: NavKey): nav is Platform {
+  return nav === "TikTok" || nav === "Amazon" || nav === "独立站";
+}
+
+function getExecutionDescription(nav: NavKey, count: number) {
+  if (nav === "blockers") return `当前卡点任务共 ${count} 个，只显示 blocker 不为空的任务。`;
+  if (nav === "overdue") return `逾期任务共 ${count} 个，只显示已超过截止日期且尚未完成的任务。`;
+  if (nav === "review") return `复盘类任务共 ${count} 个，包含数据复盘、内容复盘、效果复盘相关任务。`;
+  if (isPlatformNav(nav)) return `当前只显示 ${nav} 平台任务，可继续叠加筛选器做精细排查。`;
+  if (nav === "today") return `今日重点任务共 ${count} 个，包含高优先级、本周到期、进行中和待确认任务。`;
+  if (nav === "owners") return "按负责人分组查看任务，筛选器仍可继续叠加使用。";
+  return "集中完成筛选、快速推进、状态更新和任务细节确认。";
+}
+
 function matchesNav(task: Task, nav: NavKey) {
-  if (nav === "TikTok" || nav === "Amazon" || nav === "独立站") return task.platform === nav;
+  if (isPlatformNav(nav)) return task.platform === nav;
   if (nav === "blockers") return Boolean(task.blocker?.trim());
   if (nav === "overdue") return isOverdue(task);
-  if (nav === "today") return task.priority === "高" || isDueThisWeek(task) || Boolean(task.blocker?.trim()) || task.status === "待确认";
-  if (nav === "review") return task.business_module === "数据复盘";
+  if (nav === "today") return task.priority === "高" || isDueThisWeek(task) || task.status === "进行中" || task.status === "待确认";
+  if (nav === "review") return isReviewTask(task);
   return true;
 }
 
 function matchesQuickFilter(task: Task, filter: QuickFilter) {
   if (!filter) return true;
-  if (filter === "today") return task.priority === "高" || isDueThisWeek(task) || Boolean(task.blocker?.trim()) || task.status === "待确认";
+  if (filter === "today") return task.priority === "高" || isDueThisWeek(task) || task.status === "进行中" || task.status === "待确认";
   if (filter === "overdue") return isOverdue(task);
   if (filter === "blocker") return Boolean(task.blocker?.trim());
   if (filter === "high") return task.priority === "高";
   if (filter === "week") return isDueThisWeek(task);
   if (filter === "pending") return task.status === "待确认";
   return true;
+}
+
+function isReviewTask(task: Task) {
+  return ["数据复盘", "内容复盘", "效果复盘"].some((keyword) => task.business_module.includes(keyword));
 }
 
 function displayModule(module: string) {
