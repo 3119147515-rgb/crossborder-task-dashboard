@@ -1,28 +1,85 @@
 "use client";
 
-import { LogOut, Plus } from "lucide-react";
+import {
+  AlertTriangle,
+  BarChart3,
+  BriefcaseBusiness,
+  CalendarClock,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  Flag,
+  Gauge,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  PieChart,
+  Plus,
+  Search,
+  ShieldCheck,
+  Target,
+  TrendingUp,
+  UserRound,
+  Users,
+  X,
+  Zap,
+} from "lucide-react";
+import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
+import { Card, Badge } from "@/components/ui/surface";
 import { getSupabase } from "@/lib/supabase";
-import { isDueThisWeek, isOverdue } from "@/lib/date";
+import { formatDate, isCompleted, isDueSoon, isDueThisWeek, isOverdue } from "@/lib/date";
+import { cn } from "@/lib/utils";
 import { platforms, roles, type FiltersState, type Platform, type Task, type TaskInput } from "@/types/task";
 import { Filters, defaultFilters } from "./tasks/Filters";
 import { GroupedTaskSection } from "./tasks/GroupedTaskSection";
-import { PlatformOverview } from "./tasks/PlatformOverview";
-import { PlatformStats } from "./tasks/PlatformStats";
-import { ProjectOverview } from "./tasks/ProjectOverview";
-import { StatsCards } from "./tasks/StatsCards";
+import { ProgressBar } from "./tasks/ProgressBar";
+import { TaskDetailDrawer } from "./tasks/TaskDetailDrawer";
 import { TaskFormModal } from "./tasks/TaskFormModal";
+import { PlatformBadge, StatusBadge } from "./tasks/badges";
 import { LoadingState } from "./tasks/states";
+
+type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review";
+type ExecutionView = "platform" | "role" | "status" | "priority";
+type QuickFilter = "today" | "overdue" | "blocker" | "high" | "week" | "pending" | null;
+
+const sidebarItems: Array<{ key: NavKey; label: string; icon: typeof LayoutDashboard }> = [
+  { key: "overview", label: "运营总览", icon: LayoutDashboard },
+  { key: "today", label: "今日重点", icon: CalendarClock },
+  { key: "TikTok", label: "TikTok", icon: Zap },
+  { key: "Amazon", label: "Amazon", icon: BriefcaseBusiness },
+  { key: "独立站", label: "独立站", icon: Gauge },
+  { key: "owners", label: "负责人视图", icon: Users },
+  { key: "blockers", label: "卡点任务", icon: AlertTriangle },
+  { key: "overdue", label: "逾期任务", icon: Clock3 },
+  { key: "review", label: "数据复盘", icon: PieChart },
+];
+
+const platformAccent: Record<Platform, { dot: string; bar: string; soft: string; text: string }> = {
+  TikTok: { dot: "bg-pink-500", bar: "bg-pink-500", soft: "bg-pink-50", text: "text-pink-700" },
+  Amazon: { dot: "bg-orange-500", bar: "bg-orange-500", soft: "bg-orange-50", text: "text-orange-700" },
+  独立站: { dot: "bg-indigo-500", bar: "bg-indigo-500", soft: "bg-indigo-50", text: "text-indigo-700" },
+};
+
+const platformModules: Record<Platform, string[]> = {
+  TikTok: ["达人建联", "样品寄送", "短视频内容", "TikTok 广告", "直播", "内容复盘"],
+  Amazon: ["Listing 优化", "PPC 广告", "Review 获取", "FBA 库存", "竞品分析", "数据复盘"],
+  独立站: ["商品详情页", "广告落地页", "EDM 邮件", "支付/物流", "转化率优化", "数据复盘"],
+};
 
 export function Dashboard({ session }: { session: Session }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FiltersState>(defaultFilters);
-  const [view, setView] = useState<"platform" | "role">("platform");
+  const [executionView, setExecutionView] = useState<ExecutionView>("platform");
+  const [activeNav, setActiveNav] = useState<NavKey>("overview");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [defaultPlatform, setDefaultPlatform] = useState<Platform | undefined>();
   const supabase = getSupabase();
 
@@ -39,6 +96,8 @@ export function Dashboard({ session }: { session: Session }) {
     loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const metrics = useMemo(() => createMetrics(tasks), [tasks]);
 
   const filteredTasks = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -60,17 +119,27 @@ export function Dashboard({ session }: { session: Session }) {
           .toLowerCase()
           .includes(search);
       })
+      .filter((task) => matchesNav(task, activeNav))
+      .filter((task) => matchesQuickFilter(task, quickFilter))
       .sort((a, b) => {
         const key = filters.sortBy;
         const av = a[key] || "9999-12-31";
         const bv = b[key] || "9999-12-31";
         return key === "updated_at" ? bv.localeCompare(av) : av.localeCompare(bv);
       });
-  }, [filters, tasks]);
+  }, [activeNav, filters, quickFilter, tasks]);
+
+  const selectedLiveTask = selectedTask ? tasks.find((task) => task.id === selectedTask.id) || selectedTask : null;
 
   function openAdd(platform?: Platform) {
     setEditingTask(null);
     setDefaultPlatform(platform);
+    setModalOpen(true);
+  }
+
+  function openEdit(task: Task) {
+    setEditingTask(task);
+    setDefaultPlatform(task.platform);
     setModalOpen(true);
   }
 
@@ -106,54 +175,609 @@ export function Dashboard({ session }: { session: Session }) {
     if (!window.confirm(`确认删除任务「${task.task_name}」吗？此操作不可撤销。`)) return;
     const { error } = await supabase.from("tasks").delete().eq("id", task.id);
     if (error) console.error(error);
+    if (selectedTask?.id === task.id) setSelectedTask(null);
     await loadTasks();
   }
 
-  const groupItems = view === "platform" ? platforms : roles;
+  function selectNav(key: NavKey) {
+    setActiveNav(key);
+    setSidebarOpen(false);
+    setQuickFilter(key === "today" ? "today" : key === "blockers" ? "blocker" : key === "overdue" ? "overdue" : null);
+    if (key === "TikTok" || key === "Amazon" || key === "独立站") {
+      setFilters({ ...defaultFilters, platform: key });
+      setExecutionView("platform");
+      return;
+    }
+    if (key === "owners") {
+      setFilters(defaultFilters);
+      setExecutionView("role");
+      return;
+    }
+    if (key === "review") {
+      setFilters({ ...defaultFilters, businessModule: "数据复盘" });
+      return;
+    }
+    setFilters(defaultFilters);
+  }
+
+  const groupItems = getGroupItems(executionView, filteredTasks);
 
   return (
-    <main className="min-h-screen bg-zinc-100">
-      <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1800px] items-center justify-between px-5 py-4">
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-950">跨境电商多平台任务推进表</h1>
-            <p className="text-sm text-zinc-500">TikTok · Amazon · 独立站运营推进看板</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-zinc-500 md:inline">{session.user.email}</span>
-            <Button onClick={() => openAdd()}><Plus className="h-4 w-4" />新增任务</Button>
-            <Button variant="outline" onClick={() => supabase.auth.signOut()}><LogOut className="h-4 w-4" />退出</Button>
-          </div>
-        </div>
-      </header>
-      <div className="mx-auto max-w-[1800px] space-y-4 px-5 py-5">
-        <StatsCards tasks={tasks} />
-        <PlatformStats tasks={tasks} />
-        <ProjectOverview tasks={tasks} />
-        <PlatformOverview tasks={tasks} />
-        <Filters filters={filters} setFilters={setFilters} tasks={tasks} />
-        <div className="flex items-center gap-2">
-          <Button variant={view === "platform" ? "default" : "outline"} onClick={() => setView("platform")}>按平台视图</Button>
-          <Button variant={view === "role" ? "default" : "outline"} onClick={() => setView("role")}>按负责人视图</Button>
-          <span className="text-sm text-zinc-500">当前显示 {filteredTasks.length} / {tasks.length} 个任务</span>
-        </div>
-        {loading ? <LoadingState /> : (
-          <div className="space-y-4">
-            {groupItems.map((group) => (
-              <GroupedTaskSection
-                key={group}
-                title={group}
-                tasks={filteredTasks.filter((task) => view === "platform" ? task.platform === group : task.role === group)}
-                onAdd={openAdd}
-                onEdit={(task) => { setEditingTask(task); setModalOpen(true); }}
-                onDelete={deleteTask}
-                onQuickUpdate={quickUpdate}
-              />
-            ))}
-          </div>
-        )}
+    <main className="min-h-screen bg-[#F6F7F9] text-[#111827]">
+      <ExecutiveHeader session={session} onAdd={() => openAdd()} onSignOut={() => supabase.auth.signOut()} onMenu={() => setSidebarOpen(true)} />
+      <div className="mx-auto flex max-w-[1840px] gap-5 px-4 py-5 lg:px-6">
+        <ExecutiveSidebar activeNav={activeNav} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onSelect={selectNav} />
+        <section className="min-w-0 flex-1 space-y-5">
+          <section className="grid gap-4 xl:grid-cols-[1.65fr_1fr]">
+            <div className="space-y-4">
+              <SectionTitle eyebrow="Operations cockpit" title="运营驾驶舱" description="聚合任务状态、风险、优先级和推进效率，帮助管理层快速判断今天该盯哪里。" />
+              <MetricGrid metrics={metrics} />
+            </div>
+            <ProjectHealth metrics={metrics} />
+          </section>
+
+          <TodayWorkbench tasks={tasks} onEdit={openEdit} onOpen={setSelectedTask} />
+
+          <section className="grid gap-5 2xl:grid-cols-[1.35fr_1fr]">
+            <div className="space-y-5">
+              <PlatformBoard tasks={tasks} onPlatformAdd={openAdd} />
+              <OwnerWorkload tasks={tasks} />
+            </div>
+            <VisualInsights tasks={tasks} />
+          </section>
+
+          <Card className="overflow-hidden border-slate-200 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+            <div className="border-b border-slate-200 bg-white px-4 py-4 lg:px-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <SectionTitle eyebrow="Execution center" title="任务执行区" description="集中完成筛选、快速推进、状态更新和任务细节确认。" compact />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    ["platform", "按平台"],
+                    ["role", "按负责人"],
+                    ["status", "按状态"],
+                    ["priority", "按优先级"],
+                  ].map(([key, label]) => (
+                    <Button
+                      key={key}
+                      size="sm"
+                      variant={executionView === key ? "default" : "outline"}
+                      className={executionView === key ? "bg-blue-600 hover:bg-blue-700" : ""}
+                      onClick={() => setExecutionView(key as ExecutionView)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4">
+                <QuickFilters active={quickFilter} onChange={setQuickFilter} />
+              </div>
+            </div>
+            <div className="border-b border-slate-200 bg-slate-50/80 p-4 lg:p-5">
+              <Filters filters={filters} setFilters={setFilters} tasks={tasks} />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm text-slate-500 lg:px-5">
+              <span>当前显示 <strong className="text-slate-900">{filteredTasks.length}</strong> / {tasks.length} 个任务</span>
+              <span>点击任务行可打开右侧详情，行内控件可直接写入 Supabase。</span>
+            </div>
+            {loading ? <LoadingState /> : (
+              <div className="space-y-4 p-4 lg:p-5">
+                {groupItems.map((group) => (
+                  <GroupedTaskSection
+                    key={group}
+                    title={group}
+                    tasks={filteredTasks.filter((task) => belongsToGroup(task, executionView, group))}
+                    onAdd={openAdd}
+                    onEdit={openEdit}
+                    onDelete={deleteTask}
+                    onOpenTask={setSelectedTask}
+                    onQuickUpdate={quickUpdate}
+                  />
+                ))}
+              </div>
+            )}
+          </Card>
+        </section>
       </div>
+      <TaskDetailDrawer
+        task={selectedLiveTask}
+        onClose={() => setSelectedTask(null)}
+        onEdit={openEdit}
+        onDelete={deleteTask}
+        onQuickUpdate={quickUpdate}
+      />
       <TaskFormModal open={modalOpen} task={editingTask} defaultPlatform={defaultPlatform} onClose={() => setModalOpen(false)} onSubmit={saveTask} />
     </main>
   );
+}
+
+function ExecutiveHeader({ session, onAdd, onSignOut, onMenu }: { session: Session; onAdd: () => void; onSignOut: () => void; onMenu: () => void }) {
+  return (
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div className="mx-auto flex max-w-[1840px] items-center justify-between gap-4 px-4 py-3 lg:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="打开导航"><Menu className="h-5 w-5" /></Button>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
+            <BarChart3 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold text-slate-950 md:text-xl">跨境电商多平台运营中台</h1>
+            <p className="truncate text-xs text-slate-500 md:text-sm">TikTok · Amazon · 独立站项目推进驾驶舱</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 md:gap-3">
+          <span className="hidden max-w-[260px] truncate text-sm text-slate-500 lg:inline">{session.user.email}</span>
+          <Button className="bg-blue-600 hover:bg-blue-700" onClick={onAdd}><Plus className="h-4 w-4" />新增任务</Button>
+          <Button variant="outline" onClick={onSignOut}><LogOut className="h-4 w-4" /><span className="hidden sm:inline">退出</span></Button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function ExecutiveSidebar({ activeNav, open, onClose, onSelect }: { activeNav: NavKey; open: boolean; onClose: () => void; onSelect: (key: NavKey) => void }) {
+  return (
+    <>
+      <div className={cn("fixed inset-0 z-40 bg-slate-950/30 lg:hidden", open ? "block" : "hidden")} onClick={onClose} />
+      <aside className={cn(
+        "fixed left-0 top-0 z-50 h-full w-72 border-r border-slate-200 bg-white p-4 shadow-xl transition-transform lg:sticky lg:top-[73px] lg:z-20 lg:h-[calc(100vh-96px)] lg:translate-x-0 lg:rounded-xl lg:border lg:shadow-sm",
+        open ? "translate-x-0" : "-translate-x-full",
+      )}>
+        <div className="mb-4 flex items-center justify-between lg:hidden">
+          <span className="font-semibold text-slate-950">导航</span>
+          <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+        </div>
+        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Command center</div>
+          <div className="mt-2 text-sm font-semibold text-slate-950">每日推进视图</div>
+          <p className="mt-1 text-xs leading-5 text-slate-500">按平台、风险和负责人快速切换工作重点。</p>
+        </div>
+        <nav className="space-y-1">
+          {sidebarItems.map((item) => {
+            const Icon = item.icon;
+            const active = activeNav === item.key;
+            return (
+              <button
+                key={item.key}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium transition",
+                  active ? "bg-blue-50 text-blue-700 ring-1 ring-blue-100" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
+                )}
+                onClick={() => onSelect(item.key)}
+              >
+                <span className="flex items-center gap-3"><Icon className="h-4 w-4" />{item.label}</span>
+                <ChevronRight className={cn("h-4 w-4", active ? "opacity-100" : "opacity-0")} />
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+    </>
+  );
+}
+
+function SectionTitle({ eyebrow, title, description, compact = false }: { eyebrow: string; title: string; description: string; compact?: boolean }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">{eyebrow}</p>
+      <h2 className={cn("font-semibold text-slate-950", compact ? "mt-1 text-lg" : "mt-1 text-2xl")}>{title}</h2>
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
+    </div>
+  );
+}
+
+function MetricGrid({ metrics }: { metrics: ReturnType<typeof createMetrics> }) {
+  const items = [
+    { label: "总任务数", value: metrics.total, note: "全渠道推进池", icon: Target, tone: "blue" },
+    { label: "进行中任务", value: metrics.inProgress, note: "本周推进重点", icon: TrendingUp, tone: "blue" },
+    { label: "已完成任务", value: metrics.completed, note: "闭环交付数量", icon: CheckCircle2, tone: "green" },
+    { label: "逾期任务", value: metrics.overdue, note: "需今日关注", icon: Clock3, tone: "red" },
+    { label: "有卡点任务", value: metrics.blockers, note: "当前风险项", icon: AlertTriangle, tone: "red" },
+    { label: "高优先级任务", value: metrics.highPriority, note: "管理层关注", icon: Flag, tone: "amber" },
+    { label: "本周到期任务", value: metrics.dueThisWeek, note: "未来 7 天", icon: CalendarClock, tone: "amber" },
+    { label: "整体完成率", value: `${metrics.completionRate}%`, note: "整体项目健康度", icon: ShieldCheck, tone: "green" },
+  ] as const;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <Card key={item.label} className="border-slate-200 p-4 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm text-slate-500">{item.label}</p>
+                <div className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{item.value}</div>
+                <p className="mt-2 text-xs text-slate-500">{item.note}</p>
+              </div>
+              <div className={cn(
+                "flex h-10 w-10 items-center justify-center rounded-lg",
+                item.tone === "red" && "bg-red-50 text-red-600",
+                item.tone === "green" && "bg-emerald-50 text-emerald-600",
+                item.tone === "amber" && "bg-amber-50 text-amber-600",
+                item.tone === "blue" && "bg-blue-50 text-blue-600",
+              )}>
+                <Icon className="h-5 w-5" />
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProjectHealth({ metrics }: { metrics: ReturnType<typeof createMetrics> }) {
+  const status = metrics.overdue > 0 || metrics.blockers > 5 ? "风险" : metrics.highPriority > 8 || metrics.dueThisWeek > 8 ? "注意" : "健康";
+  const tone = status === "风险" ? "red" : status === "注意" ? "amber" : "green";
+  const reasons = [
+    metrics.overdue > 0 ? `${metrics.overdue} 个逾期任务需要立即处理` : "",
+    metrics.blockers > 0 ? `${metrics.blockers} 个任务存在卡点` : "",
+    metrics.dueThisWeek > 0 ? `${metrics.dueThisWeek} 个任务将在 7 天内到期` : "",
+  ].filter(Boolean);
+  const actions = status === "风险"
+    ? ["优先处理有卡点任务", "拉齐逾期任务责任人", "明确今天可闭环动作"]
+    : status === "注意"
+      ? ["检查本周到期任务", "推进高优先级任务闭环", "确认资源支持是否到位"]
+      : ["保持当前节奏", "关注新增高优先级任务", "按周复盘平台完成率"];
+
+  return (
+    <Card className="h-full border-slate-200 p-5 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <SectionTitle eyebrow="Project health" title="项目健康度" description="根据逾期、卡点、高优先级和本周到期任务自动判断。" compact />
+        </div>
+        <Badge className={cn(
+          "h-8 px-3",
+          tone === "red" && "bg-red-600 text-white",
+          tone === "amber" && "bg-amber-500 text-white",
+          tone === "green" && "bg-emerald-600 text-white",
+        )}>{status}</Badge>
+      </div>
+      <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <p className="text-sm font-medium text-slate-950">风险说明</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{reasons.length ? reasons.join("，") : "当前没有明显逾期或高风险堆积，整体推进稳定。"}</p>
+      </div>
+      <div className="mt-4 space-y-2">
+        <p className="text-sm font-medium text-slate-950">推荐动作</p>
+        {actions.map((action) => (
+          <div key={action} className="flex items-center gap-2 text-sm text-slate-600">
+            <span className={cn("h-1.5 w-1.5 rounded-full", tone === "red" ? "bg-red-500" : tone === "amber" ? "bg-amber-500" : "bg-emerald-500")} />
+            {action}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function TodayWorkbench({ tasks, onEdit, onOpen }: { tasks: Task[]; onEdit: (task: Task) => void; onOpen: (task: Task) => void }) {
+  const windows = [
+    { title: "今日优先处理", note: "高优先级与本周到期", tasks: tasks.filter((task) => (task.priority === "高" && task.status !== "已完成") || isDueThisWeek(task)).slice(0, 6), icon: Flag },
+    { title: "当前卡点", note: "需要资源或管理层介入", tasks: tasks.filter((task) => Boolean(task.blocker?.trim())).slice(0, 6), icon: AlertTriangle },
+    { title: "即将到期", note: "未来 7 天截止", tasks: tasks.filter(isDueThisWeek).slice(0, 6), icon: CalendarClock },
+    { title: "待确认任务", note: "等待验收或复核", tasks: tasks.filter((task) => task.status === "待确认").slice(0, 6), icon: Search },
+  ];
+  return (
+    <section className="space-y-4">
+      <SectionTitle eyebrow="Today desk" title="今日工作台" description="把当天最该处理、最容易拖慢全局的任务提前摆出来。" />
+      <div className="grid gap-4 xl:grid-cols-4">
+        {windows.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Card key={item.title} className="min-h-[280px] border-slate-200 p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-slate-950">{item.title}</h3>
+                  <p className="mt-1 text-xs text-slate-500">{item.note}</p>
+                </div>
+                <div className="rounded-lg bg-blue-50 p-2 text-blue-600"><Icon className="h-4 w-4" /></div>
+              </div>
+              <div className="mt-4 space-y-2">
+                {item.tasks.length ? item.tasks.map((task) => (
+                  <CompactTaskItem key={task.id} task={task} onEdit={onEdit} onOpen={onOpen} />
+                )) : <EmptyMini text="暂无需要处理的任务" />}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function CompactTaskItem({ task, onEdit, onOpen }: { task: Task; onEdit: (task: Task) => void; onOpen: (task: Task) => void }) {
+  return (
+    <button className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40" onClick={() => onOpen(task)}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-slate-950">{task.task_name}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <PlatformBadge value={task.platform} />
+            <StatusBadge value={task.status} />
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={(event) => {
+            event.stopPropagation();
+            onEdit(task);
+          }}
+        >
+          编辑
+        </Button>
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
+        <span>{task.owner} · {task.role}</span>
+        <span className={cn(isDueSoon(task) && "font-medium text-amber-600", isOverdue(task) && "font-medium text-red-600")}>{formatDate(task.due_date)}</span>
+      </div>
+    </button>
+  );
+}
+
+function PlatformBoard({ tasks, onPlatformAdd }: { tasks: Task[]; onPlatformAdd: (platform: Platform) => void }) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle eyebrow="Platform board" title="平台推进看板" description="对比 TikTok、Amazon、独立站推进速度、风险和模块分布。" />
+      <div className="grid gap-4 xl:grid-cols-3">
+        {platforms.map((platform) => {
+          const stats = createPlatformStats(tasks, platform);
+          const accent = platformAccent[platform];
+          return (
+            <Card key={platform} className="overflow-hidden border-slate-200 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
+              <div className={cn("h-1.5", accent.bar)} />
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("h-2.5 w-2.5 rounded-full", accent.dot)} />
+                      <h3 className="text-lg font-semibold text-slate-950">{platform}</h3>
+                    </div>
+                    <p className="mt-1 text-sm text-slate-500">任务 {stats.total} · 完成率 {stats.completionRate}%</p>
+                  </div>
+                  <Badge className={cn(stats.state === "风险" && "bg-red-600 text-white", stats.state === "注意" && "bg-amber-500 text-white", stats.state === "良好" && "bg-emerald-600 text-white", stats.state === "推进中" && "bg-blue-50 text-blue-700 ring-1 ring-blue-100")}>{stats.state}</Badge>
+                </div>
+                <div className="mt-4">
+                  <ProgressBar value={stats.completionRate} tone={accent.bar} />
+                </div>
+                <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+                  <MiniStat label="进行中" value={stats.inProgress} />
+                  <MiniStat label="卡点" value={stats.blockers} danger={stats.blockers > 0} />
+                  <MiniStat label="逾期" value={stats.overdue} danger={stats.overdue > 0} />
+                  <MiniStat label="高优先" value={stats.highPriority} />
+                </div>
+                <div className="mt-5 space-y-2">
+                  <p className="text-sm font-medium text-slate-950">模块分布</p>
+                  {platformModules[platform].map((module) => {
+                    const moduleCount = tasks.filter((task) => task.platform === platform && displayModule(task.business_module) === module).length;
+                    const width = stats.total ? Math.round((moduleCount / stats.total) * 100) : 0;
+                    return (
+                      <div key={module} className="grid grid-cols-[92px_1fr_28px] items-center gap-2 text-xs text-slate-500">
+                        <span className="truncate">{module}</span>
+                        <div className="h-2 rounded-full bg-slate-100">
+                          <div className={cn("h-2 rounded-full", accent.bar)} style={{ width: `${width}%` }} />
+                        </div>
+                        <span className="text-right font-medium text-slate-700">{moduleCount}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <Button variant="outline" size="sm" className="mt-5 w-full" onClick={() => onPlatformAdd(platform)}>
+                  <Plus className="h-4 w-4" />新增 {platform} 任务
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function OwnerWorkload({ tasks }: { tasks: Task[] }) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle eyebrow="Owner workload" title="负责人推进情况" description="按角色观察任务压力、完成率和需要支持的卡点。" />
+      <div className="grid gap-4 xl:grid-cols-3">
+        {roles.map((role) => {
+          const roleTasks = tasks.filter((task) => task.role === role);
+          const unfinished = roleTasks.filter((task) => !isCompleted(task)).length;
+          const blockers = roleTasks.filter((task) => task.blocker?.trim()).length;
+          const completed = roleTasks.filter(isCompleted).length;
+          const inProgress = roleTasks.filter((task) => task.status === "进行中").length;
+          const completionRate = roleTasks.length ? Math.round((completed / roleTasks.length) * 100) : 0;
+          const pressure = unfinished > 10 ? "高压力" : blockers > 3 ? "需支持" : "正常";
+          return (
+            <Card key={role} className="border-slate-200 p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-slate-100 p-2 text-slate-700"><UserRound className="h-4 w-4" /></div>
+                  <div>
+                    <h3 className="font-semibold text-slate-950">{role === "BD负责人" ? "BD 负责人" : role}</h3>
+                    <p className="text-xs text-slate-500">任务总数 {roleTasks.length}</p>
+                  </div>
+                </div>
+                <Badge className={cn(pressure === "高压力" && "bg-red-600 text-white", pressure === "需支持" && "bg-amber-500 text-white", pressure === "正常" && "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100")}>{pressure}</Badge>
+              </div>
+              <div className="mt-4"><ProgressBar value={completionRate} tone="bg-blue-600" /></div>
+              <div className="mt-4 grid grid-cols-4 gap-2 text-center">
+                <MiniStat label="进行中" value={inProgress} />
+                <MiniStat label="已完成" value={completed} />
+                <MiniStat label="卡点" value={blockers} danger={blockers > 0} />
+                <MiniStat label="完成率" value={`${completionRate}%`} />
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function VisualInsights({ tasks }: { tasks: Task[] }) {
+  const maxRisk = Math.max(1, ...[tasks.filter(isOverdue).length, tasks.filter((task) => task.blocker?.trim()).length, tasks.filter((task) => task.priority === "高").length, tasks.filter(isDueThisWeek).length]);
+  return (
+    <section className="space-y-4">
+      <SectionTitle eyebrow="Visual insights" title="可视化窗口" description="用轻量图形快速看出平台、状态、负责人和风险分布。" />
+      <Card className="space-y-5 border-slate-200 p-5 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
+        <ChartBlock title="平台完成率对比">
+          {platforms.map((platform) => {
+            const stats = createPlatformStats(tasks, platform);
+            return <HorizontalBar key={platform} label={platform} value={stats.completionRate} color={platformAccent[platform].bar} suffix="%" />;
+          })}
+        </ChartBlock>
+        <ChartBlock title="任务状态分布">
+          {["未开始", "进行中", "待确认", "已完成", "已暂停"].map((status) => {
+            const count = tasks.filter((task) => task.status === status).length;
+            return <HorizontalBar key={status} label={status} value={tasks.length ? Math.round((count / tasks.length) * 100) : 0} count={count} color={status === "已完成" ? "bg-emerald-500" : status === "进行中" ? "bg-blue-500" : status === "待确认" ? "bg-amber-500" : "bg-slate-400"} suffix="%" />;
+          })}
+        </ChartBlock>
+        <ChartBlock title="负责人完成率对比">
+          {roles.map((role) => {
+            const roleTasks = tasks.filter((task) => task.role === role);
+            const value = roleTasks.length ? Math.round((roleTasks.filter(isCompleted).length / roleTasks.length) * 100) : 0;
+            return <HorizontalBar key={role} label={role === "BD负责人" ? "BD 负责人" : role} value={value} color="bg-blue-600" suffix="%" />;
+          })}
+        </ChartBlock>
+        <ChartBlock title="风险任务分布">
+          {[
+            ["逾期", tasks.filter(isOverdue).length, "bg-red-600"],
+            ["有卡点", tasks.filter((task) => task.blocker?.trim()).length, "bg-orange-500"],
+            ["高优先级", tasks.filter((task) => task.priority === "高").length, "bg-amber-500"],
+            ["本周到期", tasks.filter(isDueThisWeek).length, "bg-blue-500"],
+          ].map(([label, count, color]) => (
+            <HorizontalBar key={String(label)} label={String(label)} value={Math.round((Number(count) / maxRisk) * 100)} count={Number(count)} color={String(color)} />
+          ))}
+        </ChartBlock>
+      </Card>
+    </section>
+  );
+}
+
+function QuickFilters({ active, onChange }: { active: QuickFilter; onChange: (filter: QuickFilter) => void }) {
+  const items: Array<{ key: QuickFilter; label: string }> = [
+    { key: "today", label: "今日重点" },
+    { key: "overdue", label: "逾期" },
+    { key: "blocker", label: "有卡点" },
+    { key: "high", label: "高优先级" },
+    { key: "week", label: "本周到期" },
+    { key: "pending", label: "待确认" },
+  ];
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item) => (
+        <Button key={item.key} size="sm" variant={active === item.key ? "default" : "outline"} className={active === item.key ? "bg-blue-600 hover:bg-blue-700" : ""} onClick={() => onChange(active === item.key ? null : item.key)}>
+          {item.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function ChartBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="mb-3 text-sm font-semibold text-slate-950">{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function HorizontalBar({ label, value, color, count, suffix = "" }: { label: string; value: number; color: string; count?: number; suffix?: string }) {
+  return (
+    <div className="grid grid-cols-[82px_1fr_48px] items-center gap-3 text-xs">
+      <span className="truncate text-slate-500">{label}</span>
+      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+        <div className={cn("h-full rounded-full", color)} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
+      </div>
+      <span className="text-right font-medium text-slate-700">{count ?? value}{suffix}</span>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, danger = false }: { label: string; value: number | string; danger?: boolean }) {
+  return (
+    <div className={cn("rounded-lg border border-slate-200 bg-slate-50 px-2 py-2", danger && "border-red-100 bg-red-50")}>
+      <div className={cn("text-base font-semibold text-slate-950", danger && "text-red-700")}>{value}</div>
+      <div className="mt-0.5 text-[11px] text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+function EmptyMini({ text }: { text: string }) {
+  return <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-400">{text}</div>;
+}
+
+function createMetrics(tasks: Task[]) {
+  const completed = tasks.filter(isCompleted).length;
+  return {
+    total: tasks.length,
+    inProgress: tasks.filter((task) => task.status === "进行中").length,
+    completed,
+    overdue: tasks.filter(isOverdue).length,
+    blockers: tasks.filter((task) => Boolean(task.blocker?.trim())).length,
+    highPriority: tasks.filter((task) => task.priority === "高").length,
+    dueThisWeek: tasks.filter(isDueThisWeek).length,
+    completionRate: tasks.length ? Math.round((completed / tasks.length) * 100) : 0,
+  };
+}
+
+function createPlatformStats(tasks: Task[], platform: Platform) {
+  const platformTasks = tasks.filter((task) => task.platform === platform);
+  const completed = platformTasks.filter(isCompleted).length;
+  const completionRate = platformTasks.length ? Math.round((completed / platformTasks.length) * 100) : 0;
+  const overdue = platformTasks.filter(isOverdue).length;
+  const blockers = platformTasks.filter((task) => task.blocker?.trim()).length;
+  const state = overdue > 0 ? "风险" : blockers > 2 ? "注意" : completionRate > 50 ? "良好" : "推进中";
+  return {
+    total: platformTasks.length,
+    completed,
+    completionRate,
+    inProgress: platformTasks.filter((task) => task.status === "进行中").length,
+    blockers,
+    overdue,
+    highPriority: platformTasks.filter((task) => task.priority === "高").length,
+    state,
+  };
+}
+
+function getGroupItems(view: ExecutionView, tasks: Task[]) {
+  if (view === "platform") return [...platforms];
+  if (view === "role") return [...roles];
+  const values = Array.from(new Set(tasks.map((task) => view === "status" ? task.status : task.priority)));
+  return values.length ? values : view === "status" ? ["未开始", "进行中", "待确认", "已完成", "已暂停"] : ["高", "中", "低"];
+}
+
+function belongsToGroup(task: Task, view: ExecutionView, group: string) {
+  if (view === "platform") return task.platform === group;
+  if (view === "role") return task.role === group;
+  if (view === "status") return task.status === group;
+  return task.priority === group;
+}
+
+function matchesNav(task: Task, nav: NavKey) {
+  if (nav === "TikTok" || nav === "Amazon" || nav === "独立站") return task.platform === nav;
+  if (nav === "blockers") return Boolean(task.blocker?.trim());
+  if (nav === "overdue") return isOverdue(task);
+  if (nav === "today") return task.priority === "高" || isDueThisWeek(task) || Boolean(task.blocker?.trim()) || task.status === "待确认";
+  if (nav === "review") return task.business_module === "数据复盘";
+  return true;
+}
+
+function matchesQuickFilter(task: Task, filter: QuickFilter) {
+  if (!filter) return true;
+  if (filter === "today") return task.priority === "高" || isDueThisWeek(task) || Boolean(task.blocker?.trim()) || task.status === "待确认";
+  if (filter === "overdue") return isOverdue(task);
+  if (filter === "blocker") return Boolean(task.blocker?.trim());
+  if (filter === "high") return task.priority === "高";
+  if (filter === "week") return isDueThisWeek(task);
+  if (filter === "pending") return task.status === "待确认";
+  return true;
+}
+
+function displayModule(module: string) {
+  return module === "支付物流" ? "支付/物流" : module;
 }

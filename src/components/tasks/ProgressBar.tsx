@@ -1,4 +1,6 @@
-export function ProgressBar({ value }: { value: number }) {
+import { cn } from "@/lib/utils";
+
+export function ProgressBar({ value, tone = "bg-blue-600" }: { value: number; tone?: string }) {
   const safeValue = Math.min(100, Math.max(0, value || 0));
   return (
     <div className="min-w-28">
@@ -8,7 +10,7 @@ export function ProgressBar({ value }: { value: number }) {
       </div>
       <div className="h-2 rounded-full bg-zinc-100">
         <div
-          className="h-2 rounded-full bg-zinc-950 transition-all"
+          className={cn("h-2 rounded-full transition-all", tone)}
           style={{ width: `${safeValue}%` }}
         />
       </div>
