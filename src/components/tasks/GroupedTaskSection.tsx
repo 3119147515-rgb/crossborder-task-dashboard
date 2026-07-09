@@ -16,6 +16,8 @@ export function GroupedTaskSection({
   onEdit,
   onDelete,
   onOpenTask,
+  onQuickEdit,
+  onComplete,
   onQuickUpdate,
 }: {
   title: string;
@@ -24,6 +26,8 @@ export function GroupedTaskSection({
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onOpenTask: (task: Task) => void;
+  onQuickEdit: (task: Task) => void;
+  onComplete: (task: Task) => void;
   onQuickUpdate: (task: Task, patch: Partial<Task>) => Promise<void>;
 }) {
   const [open, setOpen] = useState(true);
@@ -43,7 +47,17 @@ export function GroupedTaskSection({
           快速新增
         </Button>
       </div>
-      {open ? tasks.length ? <TaskTable tasks={tasks} onEdit={onEdit} onDelete={onDelete} onOpenTask={onOpenTask} onQuickUpdate={onQuickUpdate} /> : <div className="p-4"><EmptyState /></div> : null}
+      {open ? tasks.length ? (
+        <TaskTable
+          tasks={tasks}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onOpenTask={onOpenTask}
+          onQuickEdit={onQuickEdit}
+          onComplete={onComplete}
+          onQuickUpdate={onQuickUpdate}
+        />
+      ) : <div className="p-4"><EmptyState /></div> : null}
     </Card>
   );
 }

@@ -1,12 +1,12 @@
 "use client";
 
-import { CheckCircle2, Edit, Trash2, X } from "lucide-react";
+import { CheckCircle2, Edit, RefreshCw, Trash2, X } from "lucide-react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
-import { formatDate, formatDateTime, isDueSoon, isOverdue } from "@/lib/date";
+import { formatDate, formatDateTime, isCompleted, isDueSoon, isOverdue } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/types/task";
-import { BusinessModuleBadge, OverdueBadge, PlatformBadge, PriorityBadge, StageBadge, StatusBadge } from "./badges";
+import { BusinessModuleBadge, OverdueBadge, PlatformBadge, PriorityBadge, RiskBadge, StageBadge, StatusBadge } from "./badges";
 import { ProgressBar } from "./ProgressBar";
 
 export function TaskDetailDrawer({
@@ -14,12 +14,16 @@ export function TaskDetailDrawer({
   onClose,
   onEdit,
   onDelete,
+  onQuickEdit,
+  onComplete,
   onQuickUpdate,
 }: {
   task: Task | null;
   onClose: () => void;
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
+  onQuickEdit: (task: Task) => void;
+  onComplete: (task: Task) => void;
   onQuickUpdate: (task: Task, patch: Partial<Task>) => Promise<void>;
 }) {
   if (!task) return null;
@@ -35,6 +39,7 @@ export function TaskDetailDrawer({
                 <PlatformBadge value={task.platform} />
                 <StatusBadge value={task.status} />
                 <PriorityBadge value={task.priority} />
+                <RiskBadge task={task} />
                 <OverdueBadge task={task} />
               </div>
               <h2 className="text-xl font-semibold leading-7 text-slate-950">{task.task_name}</h2>
@@ -95,8 +100,11 @@ export function TaskDetailDrawer({
         </div>
 
         <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4">
+          <Button variant="outline" onClick={() => onQuickEdit(task)}><RefreshCw className="h-4 w-4" />快速更新</Button>
           <Button variant="outline" onClick={() => onEdit(task)}><Edit className="h-4 w-4" />编辑</Button>
-          <Button variant="secondary" onClick={() => onQuickUpdate(task, { status: "已完成", progress: 100 })}><CheckCircle2 className="h-4 w-4" />标记完成</Button>
+          {!isCompleted(task) ? (
+            <Button variant="secondary" onClick={() => onComplete(task)}><CheckCircle2 className="h-4 w-4" />一键完成</Button>
+          ) : null}
           <Button variant="destructive" onClick={() => onDelete(task)}><Trash2 className="h-4 w-4" />删除</Button>
         </div>
       </aside>

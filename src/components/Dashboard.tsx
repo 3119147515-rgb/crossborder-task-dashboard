@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Edit,
   Flag,
   Gauge,
   LayoutDashboard,
@@ -15,7 +16,7 @@ import {
   Menu,
   PieChart,
   Plus,
-  Search,
+  RefreshCw,
   ShieldCheck,
   Target,
   TrendingUp,
@@ -31,14 +32,16 @@ import { Button } from "@/components/ui/button";
 import { Card, Badge } from "@/components/ui/surface";
 import { getSupabase } from "@/lib/supabase";
 import { formatDate, isCompleted, isDueSoon, isDueThisWeek, isOverdue } from "@/lib/date";
+import { getPlatformHealth, getTaskReasonTags, getTodayPriorityTasks } from "@/lib/task-risk";
 import { cn } from "@/lib/utils";
 import { platforms, roles, type FiltersState, type Platform, type Task, type TaskInput } from "@/types/task";
 import { Filters, defaultFilters } from "./tasks/Filters";
 import { GroupedTaskSection } from "./tasks/GroupedTaskSection";
 import { ProgressBar } from "./tasks/ProgressBar";
+import { QuickUpdateModal, type QuickUpdateInput } from "./tasks/QuickUpdateModal";
 import { TaskDetailDrawer } from "./tasks/TaskDetailDrawer";
 import { TaskFormModal } from "./tasks/TaskFormModal";
-import { PlatformBadge, StatusBadge } from "./tasks/badges";
+import { PlatformBadge, RiskBadge, StatusBadge } from "./tasks/badges";
 import { LoadingState } from "./tasks/states";
 
 type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review";
@@ -128,6 +131,8 @@ export function Dashboard({ session }: { session: Session }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [quickEditingTask, setQuickEditingTask] = useState<Task | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [defaultPlatform, setDefaultPlatform] = useState<Platform | undefined>();
   const supabase = getSupabase();
 
@@ -144,6 +149,12 @@ export function Dashboard({ session }: { session: Session }) {
     loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const metrics = useMemo(() => createMetrics(tasks), [tasks]);
 
@@ -219,6 +230,20 @@ export function Dashboard({ session }: { session: Session }) {
     }
   }
 
+  async function saveQuickUpdate(task: Task, input: QuickUpdateInput) {
+    await quickUpdate(task, input);
+    await loadTasks();
+    setNotice("快速更新已保存");
+  }
+
+  async function completeTask(task: Task) {
+    if (isCompleted(task)) return;
+    if (!window.confirm("确认将该任务标记为已完成吗？")) return;
+    await quickUpdate(task, { status: "已完成", progress: 100, completed_at: new Date().toISOString() });
+    await loadTasks();
+    setNotice("任务已标记完成");
+  }
+
   async function deleteTask(task: Task) {
     if (!window.confirm(`确认删除任务「${task.task_name}」吗？此操作不可撤销。`)) return;
     const { error } = await supabase.from("tasks").delete().eq("id", task.id);
@@ -274,11 +299,19 @@ export function Dashboard({ session }: { session: Session }) {
               <div className="space-y-4">
                 <MetricGrid metrics={metrics} />
               </div>
-              <ProjectHealth metrics={metrics} />
+              <ProjectHealth metrics={metrics} tasks={tasks} />
             </section>
           ) : null}
 
-          {showToday ? <TodayWorkbench tasks={showOverview ? tasks : filteredTasks} onEdit={openEdit} onOpen={setSelectedTask} /> : null}
+          {showToday ? (
+            <TodayWorkbench
+              tasks={showOverview ? tasks : filteredTasks}
+              onEdit={openEdit}
+              onOpen={setSelectedTask}
+              onQuickEdit={setQuickEditingTask}
+              onComplete={completeTask}
+            />
+          ) : null}
 
           {showPlatformBoard || showOwnerWorkload || showVisualInsights ? (
             <section className="grid gap-5 2xl:grid-cols-[1.35fr_1fr]">
@@ -337,6 +370,8 @@ export function Dashboard({ session }: { session: Session }) {
                     onEdit={openEdit}
                     onDelete={deleteTask}
                     onOpenTask={setSelectedTask}
+                    onQuickEdit={setQuickEditingTask}
+                    onComplete={completeTask}
                     onQuickUpdate={quickUpdate}
                   />
                 ))}
@@ -350,9 +385,17 @@ export function Dashboard({ session }: { session: Session }) {
         onClose={() => setSelectedTask(null)}
         onEdit={openEdit}
         onDelete={deleteTask}
+        onQuickEdit={setQuickEditingTask}
+        onComplete={completeTask}
         onQuickUpdate={quickUpdate}
       />
+      <QuickUpdateModal key={quickEditingTask?.id || "quick-update"} task={quickEditingTask} open={Boolean(quickEditingTask)} onClose={() => setQuickEditingTask(null)} onSubmit={saveQuickUpdate} />
       <TaskFormModal open={modalOpen} task={editingTask} defaultPlatform={defaultPlatform} onClose={() => setModalOpen(false)} onSubmit={saveTask} />
+      {notice ? (
+        <div className="fixed bottom-5 right-5 z-[70] rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-700 shadow-xl">
+          {notice}
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -503,9 +546,10 @@ function MetricGrid({ metrics }: { metrics: ReturnType<typeof createMetrics> }) 
   );
 }
 
-function ProjectHealth({ metrics }: { metrics: ReturnType<typeof createMetrics> }) {
+function ProjectHealth({ metrics, tasks }: { metrics: ReturnType<typeof createMetrics>; tasks: Task[] }) {
   const status = metrics.overdue > 0 || metrics.blockers > 5 ? "风险" : metrics.highPriority > 8 || metrics.dueThisWeek > 8 ? "注意" : "健康";
   const tone = status === "风险" ? "red" : status === "注意" ? "amber" : "green";
+  const platformHealth = platforms.map((platform) => ({ platform, ...getPlatformHealth(tasks, platform) }));
   const reasons = [
     metrics.overdue > 0 ? `${metrics.overdue} 个逾期任务需要立即处理` : "",
     metrics.blockers > 0 ? `${metrics.blockers} 个任务存在卡点` : "",
@@ -543,46 +587,80 @@ function ProjectHealth({ metrics }: { metrics: ReturnType<typeof createMetrics> 
           </div>
         ))}
       </div>
+      <div className="mt-5 border-t border-slate-200 pt-4">
+        <p className="text-sm font-medium text-slate-950">平台健康分</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          {platformHealth.map((item) => (
+            <div key={item.platform} className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-slate-800">{item.platform}</span>
+                <HealthBadge status={item.status} />
+              </div>
+              <div className="mt-2 text-2xl font-semibold text-slate-950">{item.score}</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </Card>
   );
 }
 
-function TodayWorkbench({ tasks, onEdit, onOpen }: { tasks: Task[]; onEdit: (task: Task) => void; onOpen: (task: Task) => void }) {
-  const windows = [
-    { title: "今日优先处理", note: "高优先级与本周到期", tasks: tasks.filter((task) => (task.priority === "高" && task.status !== "已完成") || isDueThisWeek(task)).slice(0, 6), icon: Flag },
-    { title: "当前卡点", note: "需要资源或管理层介入", tasks: tasks.filter((task) => Boolean(task.blocker?.trim())).slice(0, 6), icon: AlertTriangle },
-    { title: "即将到期", note: "未来 7 天截止", tasks: tasks.filter(isDueThisWeek).slice(0, 6), icon: CalendarClock },
-    { title: "待确认任务", note: "等待验收或复核", tasks: tasks.filter((task) => task.status === "待确认").slice(0, 6), icon: Search },
-  ];
+function TodayWorkbench({
+  tasks,
+  onEdit,
+  onOpen,
+  onQuickEdit,
+  onComplete,
+}: {
+  tasks: Task[];
+  onEdit: (task: Task) => void;
+  onOpen: (task: Task) => void;
+  onQuickEdit: (task: Task) => void;
+  onComplete: (task: Task) => void;
+}) {
+  const priorityTasks = getTodayPriorityTasks(tasks).slice(0, 8);
   return (
     <section className="space-y-4">
-      <SectionTitle eyebrow="Today desk" title="今日工作台" description="把当天最该处理、最容易拖慢全局的任务提前摆出来。" />
-      <div className="grid gap-4 xl:grid-cols-4">
-        {windows.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Card key={item.title} className="min-h-[280px] border-slate-200 p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold text-slate-950">{item.title}</h3>
-                  <p className="mt-1 text-xs text-slate-500">{item.note}</p>
-                </div>
-                <div className="rounded-lg bg-blue-50 p-2 text-blue-600"><Icon className="h-4 w-4" /></div>
-              </div>
-              <div className="mt-4 space-y-2">
-                {item.tasks.length ? item.tasks.map((task) => (
-                  <CompactTaskItem key={task.id} task={task} onEdit={onEdit} onOpen={onOpen} />
-                )) : <EmptyMini text="暂无需要处理的任务" />}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+      <SectionTitle eyebrow="Today desk" title="今日工作台" description="按逾期、卡点、高优先级、本周到期、待确认和进行中自动排序，只展示最重要的 8 个任务。" />
+      <Card className="border-slate-200 p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-slate-950">智能优先队列</h3>
+            <p className="mt-1 text-xs text-slate-500">当前优先任务 {priorityTasks.length} 个，点击任务可打开详情。</p>
+          </div>
+          <div className="rounded-lg bg-blue-50 p-2 text-blue-600"><Flag className="h-4 w-4" /></div>
+        </div>
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {priorityTasks.length ? priorityTasks.map((task) => (
+            <CompactTaskItem
+              key={task.id}
+              task={task}
+              onEdit={onEdit}
+              onOpen={onOpen}
+              onQuickEdit={onQuickEdit}
+              onComplete={onComplete}
+            />
+          )) : <EmptyMini text="暂无需要处理的任务" />}
+        </div>
+      </Card>
     </section>
   );
 }
 
-function CompactTaskItem({ task, onEdit, onOpen }: { task: Task; onEdit: (task: Task) => void; onOpen: (task: Task) => void }) {
+function CompactTaskItem({
+  task,
+  onEdit,
+  onOpen,
+  onQuickEdit,
+  onComplete,
+}: {
+  task: Task;
+  onEdit: (task: Task) => void;
+  onOpen: (task: Task) => void;
+  onQuickEdit: (task: Task) => void;
+  onComplete: (task: Task) => void;
+}) {
+  const tags = getTaskReasonTags(task);
   return (
     <button className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40" onClick={() => onOpen(task)}>
       <div className="flex items-start justify-between gap-2">
@@ -591,26 +669,70 @@ function CompactTaskItem({ task, onEdit, onOpen }: { task: Task; onEdit: (task: 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <PlatformBadge value={task.platform} />
             <StatusBadge value={task.status} />
+            <RiskBadge task={task} />
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={(event) => {
-            event.stopPropagation();
-            onEdit(task);
-          }}
-        >
-          编辑
-        </Button>
+        <div className="flex shrink-0 gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            title="快速更新"
+            onClick={(event) => {
+              event.stopPropagation();
+              onQuickEdit(task);
+            }}
+          >
+            <RefreshCw className="h-4 w-4 text-blue-600" />
+          </Button>
+          {!isCompleted(task) ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              title="一键完成"
+              onClick={(event) => {
+                event.stopPropagation();
+                onComplete(task);
+              }}
+            >
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="icon"
+            title="完整编辑"
+            onClick={(event) => {
+              event.stopPropagation();
+              onEdit(task);
+            }}
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
+      {tags.length ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {tags.map((tag) => <ReasonTag key={tag} label={tag} />)}
+        </div>
+      ) : null}
       <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
         <span>{task.owner} · {task.role}</span>
         <span className={cn(isDueSoon(task) && "font-medium text-amber-600", isOverdue(task) && "font-medium text-red-600")}>{formatDate(task.due_date)}</span>
       </div>
     </button>
   );
+}
+
+function ReasonTag({ label }: { label: string }) {
+  const cls = {
+    已逾期: "bg-red-50 text-red-700 ring-red-100",
+    有卡点: "bg-orange-50 text-orange-700 ring-orange-100",
+    高优先级: "bg-rose-50 text-rose-700 ring-rose-100",
+    本周到期: "bg-amber-50 text-amber-700 ring-amber-100",
+    待确认: "bg-yellow-50 text-yellow-700 ring-yellow-100",
+    进行中: "bg-blue-50 text-blue-700 ring-blue-100",
+  }[label] || "bg-slate-100 text-slate-600 ring-slate-100";
+  return <span className={cn("inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ring-1", cls)}>{label}</span>;
 }
 
 function PlatformBoard({ tasks, platformsToShow = platforms, onPlatformAdd }: { tasks: Task[]; platformsToShow?: readonly Platform[]; onPlatformAdd: (platform: Platform) => void }) {
@@ -620,6 +742,7 @@ function PlatformBoard({ tasks, platformsToShow = platforms, onPlatformAdd }: { 
       <div className="grid gap-4 xl:grid-cols-3">
         {platformsToShow.map((platform) => {
           const stats = createPlatformStats(tasks, platform);
+          const health = getPlatformHealth(tasks, platform);
           const accent = platformAccent[platform];
           return (
             <Card key={platform} className="overflow-hidden border-slate-200 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
@@ -633,7 +756,19 @@ function PlatformBoard({ tasks, platformsToShow = platforms, onPlatformAdd }: { 
                     </div>
                     <p className="mt-1 text-sm text-slate-500">任务 {stats.total} · 完成率 {stats.completionRate}%</p>
                   </div>
-                  <Badge className={cn(stats.state === "风险" && "bg-red-600 text-white", stats.state === "注意" && "bg-amber-500 text-white", stats.state === "良好" && "bg-emerald-600 text-white", stats.state === "推进中" && "bg-blue-50 text-blue-700 ring-1 ring-blue-100")}>{stats.state}</Badge>
+                  <HealthBadge status={health.status} />
+                </div>
+                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500">健康分</span>
+                    <span className={cn("font-semibold", health.score >= 80 && "text-emerald-700", health.score >= 60 && health.score < 80 && "text-amber-700", health.score < 60 && "text-red-700")}>{health.score}/100</span>
+                  </div>
+                  <div className="mt-2 h-2 rounded-full bg-white">
+                    <div
+                      className={cn("h-2 rounded-full", health.score >= 80 ? "bg-emerald-500" : health.score >= 60 ? "bg-amber-500" : "bg-red-500")}
+                      style={{ width: `${health.score}%` }}
+                    />
+                  </div>
                 </div>
                 <div className="mt-4">
                   <ProgressBar value={stats.completionRate} tone={accent.bar} />
@@ -642,7 +777,7 @@ function PlatformBoard({ tasks, platformsToShow = platforms, onPlatformAdd }: { 
                   <MiniStat label="进行中" value={stats.inProgress} />
                   <MiniStat label="卡点" value={stats.blockers} danger={stats.blockers > 0} />
                   <MiniStat label="逾期" value={stats.overdue} danger={stats.overdue > 0} />
-                  <MiniStat label="高优先" value={stats.highPriority} />
+                  <MiniStat label="高优先" value={health.highOpen} />
                 </div>
                 <div className="mt-5 space-y-2">
                   <p className="text-sm font-medium text-slate-950">模块分布</p>
@@ -669,6 +804,16 @@ function PlatformBoard({ tasks, platformsToShow = platforms, onPlatformAdd }: { 
         })}
       </div>
     </section>
+  );
+}
+
+function HealthBadge({ status }: { status: "健康" | "注意" | "风险" }) {
+  return (
+    <Badge className={cn(
+      status === "健康" && "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100",
+      status === "注意" && "bg-amber-50 text-amber-700 ring-1 ring-amber-100",
+      status === "风险" && "bg-red-600 text-white",
+    )}>{status}</Badge>
   );
 }
 

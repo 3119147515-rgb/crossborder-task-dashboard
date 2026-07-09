@@ -1,11 +1,11 @@
 "use client";
 
-import { Edit, Trash2 } from "lucide-react";
+import { CheckCircle2, Edit, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatDate, formatDateTime, isDueSoon, isOverdue } from "@/lib/date";
+import { formatDate, formatDateTime, isCompleted, isDueSoon, isOverdue } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import type { Task } from "@/types/task";
-import { BusinessModuleBadge, OverdueBadge, PlatformBadge, PriorityBadge, StageBadge, StatusBadge } from "./badges";
+import { BusinessModuleBadge, OverdueBadge, PlatformBadge, PriorityBadge, RiskBadge, StageBadge, StatusBadge } from "./badges";
 import { ProgressBar } from "./ProgressBar";
 
 export function TaskTable({
@@ -13,20 +13,24 @@ export function TaskTable({
   onEdit,
   onDelete,
   onOpenTask,
+  onQuickEdit,
+  onComplete,
   onQuickUpdate,
 }: {
   tasks: Task[];
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onOpenTask: (task: Task) => void;
+  onQuickEdit: (task: Task) => void;
+  onComplete: (task: Task) => void;
   onQuickUpdate: (task: Task, patch: Partial<Task>) => Promise<void>;
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1500px] border-separate border-spacing-0 text-sm">
+      <table className="w-full min-w-[1580px] border-separate border-spacing-0 text-sm">
         <thead>
           <tr className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-            {["平台", "任务", "负责人", "模块/阶段", "优先级", "状态", "进度", "截止", "最新进展", "卡点", "下一步", "KPI", "更新", "操作"].map((item) => (
+            {["平台", "任务", "负责人", "模块/阶段", "优先级", "状态", "风险", "进度", "截止", "最新进展", "卡点", "下一步", "KPI", "更新", "操作"].map((item) => (
               <th className="border-b border-slate-200 px-3 py-3" key={item}>{item}</th>
             ))}
           </tr>
@@ -62,6 +66,7 @@ export function TaskTable({
                 </select>
                 <div className="mt-1"><StatusBadge value={task.status} /></div>
               </td>
+              <td className="border-b border-slate-100 px-3 py-3"><RiskBadge task={task} /></td>
               <td className="border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
                 <ProgressBar value={task.progress} />
                 <input
@@ -94,6 +99,10 @@ export function TaskTable({
               <td className="border-b border-slate-100 px-3 py-3 text-xs text-slate-500">{formatDateTime(task.updated_at)}</td>
               <td className="border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
                 <div className="flex gap-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
+                  <Button variant="ghost" size="icon" title="快速更新" onClick={() => onQuickEdit(task)}><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
+                  {!isCompleted(task) ? (
+                    <Button variant="ghost" size="icon" title="一键完成" onClick={() => onComplete(task)}><CheckCircle2 className="h-4 w-4 text-emerald-600" /></Button>
+                  ) : null}
                   <Button variant="ghost" size="icon" title="编辑任务" onClick={() => onEdit(task)}><Edit className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" title="删除任务" onClick={() => onDelete(task)}><Trash2 className="h-4 w-4 text-red-600" /></Button>
                 </div>
