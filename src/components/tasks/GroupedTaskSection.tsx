@@ -37,10 +37,10 @@ export function GroupedTaskSection({
   return (
     <Card className="overflow-hidden border-slate-200 shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-200 bg-white px-4 py-3 md:flex-row md:items-center md:justify-between">
-        <button className="flex items-center gap-2 text-left" onClick={() => setOpen(!open)}>
-          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          <span className="font-semibold text-slate-950">{title}</span>
-          <span className="text-sm text-slate-500">{tasks.length} 个任务 · 完成率 {rate}% · 逾期 {tasks.filter(isOverdue).length}</span>
+        <button className="flex min-w-0 items-center gap-2 text-left" onClick={() => setOpen(!open)}>
+          {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+          <span className="shrink-0 font-semibold text-slate-950">{title}</span>
+          <span className="truncate text-sm text-slate-500">{tasks.length} 个任务 · 完成率 {rate}% · 逾期 {tasks.filter(isOverdue).length}</span>
         </button>
         <Button size="sm" variant="outline" onClick={() => onAdd(title === "TikTok" || title === "Amazon" || title === "独立站" ? title : undefined)}>
           <Plus className="h-4 w-4" />

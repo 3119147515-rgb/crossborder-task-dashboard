@@ -25,13 +25,31 @@ export function TaskTable({
   onComplete: (task: Task) => void;
   onQuickUpdate: (task: Task, patch: Partial<Task>) => Promise<void>;
 }) {
+  const columns = [
+    ["平台", "w-[90px] min-w-[90px]"],
+    ["任务", "w-[280px] min-w-[280px]"],
+    ["负责人", "w-[130px] min-w-[130px]"],
+    ["模块/阶段", "w-[150px] min-w-[150px]"],
+    ["优先级", "w-[90px] min-w-[90px]"],
+    ["状态", "w-[120px] min-w-[120px]"],
+    ["风险", "w-[110px] min-w-[110px]"],
+    ["进度", "w-[170px] min-w-[170px]"],
+    ["截止", "w-[120px] min-w-[120px]"],
+    ["最新进展", "w-[220px] min-w-[220px]"],
+    ["卡点", "w-[210px] min-w-[210px]"],
+    ["下一步", "w-[210px] min-w-[210px]"],
+    ["KPI", "w-[170px] min-w-[170px]"],
+    ["更新", "w-[150px] min-w-[150px]"],
+    ["操作", "w-[170px] min-w-[170px]"],
+  ];
+
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1580px] border-separate border-spacing-0 text-sm">
+      <table className="w-full min-w-[2400px] border-separate border-spacing-0 text-sm">
         <thead>
           <tr className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-            {["平台", "任务", "负责人", "模块/阶段", "优先级", "状态", "风险", "进度", "截止", "最新进展", "卡点", "下一步", "KPI", "更新", "操作"].map((item) => (
-              <th className="border-b border-slate-200 px-3 py-3" key={item}>{item}</th>
+            {columns.map(([item, width]) => (
+              <th className={cn("sticky top-0 z-10 border-b border-slate-200 bg-slate-50 px-3 py-3 whitespace-nowrap", width)} key={item}>{item}</th>
             ))}
           </tr>
         </thead>
@@ -42,23 +60,23 @@ export function TaskTable({
               key={task.id}
               onClick={() => onOpenTask(task)}
             >
-              <td className="border-b border-slate-100 px-3 py-3"><PlatformBadge value={task.platform} /></td>
-              <td className="max-w-72 border-b border-slate-100 px-3 py-3">
-                <div className="font-semibold text-slate-950">{task.task_name}</div>
-                <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{task.description}</div>
+              <td className="w-[90px] min-w-[90px] border-b border-slate-100 px-3 py-3"><PlatformBadge value={task.platform} /></td>
+              <td className="w-[280px] min-w-[280px] border-b border-slate-100 px-3 py-3">
+                <div className="line-clamp-2 font-semibold leading-5 text-slate-950">{task.task_name}</div>
+                <div className="mt-1 line-clamp-2 safe-text text-xs leading-5 text-slate-500">{task.description}</div>
               </td>
-              <td className="border-b border-slate-100 px-3 py-3">
-                <div className="font-medium text-slate-900">{task.owner}</div>
-                <div className="text-xs text-slate-500">{task.role === "BD负责人" ? "BD 负责人" : task.role}</div>
+              <td className="w-[130px] min-w-[130px] border-b border-slate-100 px-3 py-3">
+                <div className="truncate font-medium text-slate-900">{task.owner}</div>
+                <div className="whitespace-nowrap text-xs text-slate-500">{task.role === "BD负责人" ? "BD 负责人" : task.role}</div>
               </td>
-              <td className="space-y-1 border-b border-slate-100 px-3 py-3">
+              <td className="w-[150px] min-w-[150px] space-y-1 border-b border-slate-100 px-3 py-3">
                 <BusinessModuleBadge value={task.business_module} />
                 <StageBadge value={task.project_stage} />
               </td>
-              <td className="border-b border-slate-100 px-3 py-3"><PriorityBadge value={task.priority} /></td>
-              <td className="border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
+              <td className="w-[90px] min-w-[90px] border-b border-slate-100 px-3 py-3"><PriorityBadge value={task.priority} /></td>
+              <td className="w-[120px] min-w-[120px] border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
                 <select
-                  className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs outline-none focus:border-blue-400"
+                  className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs outline-none focus:border-blue-400"
                   value={task.status}
                   onChange={(event) => onQuickUpdate(task, { status: event.target.value as Task["status"], progress: event.target.value === "已完成" ? 100 : task.progress })}
                 >
@@ -66,8 +84,8 @@ export function TaskTable({
                 </select>
                 <div className="mt-1"><StatusBadge value={task.status} /></div>
               </td>
-              <td className="border-b border-slate-100 px-3 py-3"><RiskBadge task={task} /></td>
-              <td className="border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
+              <td className="w-[110px] min-w-[110px] border-b border-slate-100 px-3 py-3"><RiskBadge task={task} /></td>
+              <td className="w-[170px] min-w-[170px] border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
                 <ProgressBar value={task.progress} />
                 <input
                   aria-label="修改进度"
@@ -79,26 +97,26 @@ export function TaskTable({
                   onChange={(event) => onQuickUpdate(task, { progress: Number(event.target.value), status: Number(event.target.value) === 100 ? "已完成" : task.status })}
                 />
               </td>
-              <td className="border-b border-slate-100 px-3 py-3">
+              <td className="w-[120px] min-w-[120px] border-b border-slate-100 px-3 py-3">
                 <div className={cn("font-medium text-slate-700", isDueSoon(task) && "text-amber-600", isOverdue(task) && "text-red-600")}>{formatDate(task.due_date)}</div>
                 <div className="mt-1"><OverdueBadge task={task} /></div>
               </td>
-              <td className="max-w-60 border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
-                <textarea className="h-16 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-400" defaultValue={task.latest_update || ""} onBlur={(event) => onQuickUpdate(task, { latest_update: event.target.value })} />
+              <td className="w-[220px] min-w-[220px] border-b border-slate-100 px-3 py-3">
+                <SummaryText value={task.latest_update} />
               </td>
-              <td className="max-w-56 border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
-                <textarea className={cn("h-16 w-full rounded-md border px-2 py-1 text-xs outline-none focus:border-blue-400", task.blocker?.trim() ? "border-red-200 bg-red-50 text-red-800" : "border-slate-200 bg-white")} defaultValue={task.blocker || ""} onBlur={(event) => onQuickUpdate(task, { blocker: event.target.value })} />
+              <td className="w-[210px] min-w-[210px] border-b border-slate-100 px-3 py-3">
+                <SummaryText value={task.blocker} danger={Boolean(task.blocker?.trim())} />
               </td>
-              <td className="max-w-56 border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
-                <textarea className="h-16 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-400" defaultValue={task.next_action || ""} onBlur={(event) => onQuickUpdate(task, { next_action: event.target.value })} />
+              <td className="w-[210px] min-w-[210px] border-b border-slate-100 px-3 py-3">
+                <SummaryText value={task.next_action} />
               </td>
-              <td className="border-b border-slate-100 px-3 py-3">
-                <div className="font-medium text-slate-800">{task.kpi_metric || "-"}</div>
-                <div className="text-xs text-slate-500">目标 {task.target_value || "-"} / 当前 {task.current_value || "-"}</div>
+              <td className="w-[170px] min-w-[170px] border-b border-slate-100 px-3 py-3">
+                <div className="truncate font-medium text-slate-800">{task.kpi_metric || "-"}</div>
+                <div className="whitespace-nowrap text-xs text-slate-500">目标 {task.target_value || "-"} / 当前 {task.current_value || "-"}</div>
               </td>
-              <td className="border-b border-slate-100 px-3 py-3 text-xs text-slate-500">{formatDateTime(task.updated_at)}</td>
-              <td className="border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
-                <div className="flex gap-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
+              <td className="w-[150px] min-w-[150px] border-b border-slate-100 px-3 py-3 text-xs text-slate-500">{formatDateTime(task.updated_at)}</td>
+              <td className="w-[170px] min-w-[170px] border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
+                <div className="flex flex-nowrap gap-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
                   <Button variant="ghost" size="icon" title="快速更新" onClick={() => onQuickEdit(task)}><RefreshCw className="h-4 w-4 text-blue-600" /></Button>
                   {!isCompleted(task) ? (
                     <Button variant="ghost" size="icon" title="一键完成" onClick={() => onComplete(task)}><CheckCircle2 className="h-4 w-4 text-emerald-600" /></Button>
@@ -111,6 +129,17 @@ export function TaskTable({
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function SummaryText({ value, danger = false }: { value?: string | null; danger?: boolean }) {
+  return (
+    <div className={cn(
+      "min-h-10 rounded-lg border px-2.5 py-2 text-xs leading-5",
+      danger ? "border-red-100 bg-red-50 text-red-800" : "border-slate-100 bg-slate-50 text-slate-600",
+    )}>
+      <span className="line-clamp-2 safe-text">{value?.trim() || "未填写"}</span>
     </div>
   );
 }

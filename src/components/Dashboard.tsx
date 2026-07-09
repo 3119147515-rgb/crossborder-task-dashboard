@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   BarChart3,
+  Bell,
   BookOpen,
   BriefcaseBusiness,
   CalendarClock,
@@ -62,6 +63,14 @@ const sidebarItems: Array<{ key: NavKey; label: string; icon: typeof LayoutDashb
   { key: "overdue", label: "逾期任务", icon: Clock3 },
   { key: "review", label: "数据复盘", icon: PieChart },
   { key: "help", label: "使用说明", icon: BookOpen },
+];
+
+const sidebarGroups: Array<{ title: string; items: typeof sidebarItems }> = [
+  { title: "工作台", items: sidebarItems.filter((item) => item.key === "overview" || item.key === "today") },
+  { title: "平台", items: sidebarItems.filter((item) => item.key === "TikTok" || item.key === "Amazon" || item.key === "独立站") },
+  { title: "协作", items: sidebarItems.filter((item) => item.key === "owners" || item.key === "blockers" || item.key === "overdue") },
+  { title: "分析", items: sidebarItems.filter((item) => item.key === "review") },
+  { title: "帮助", items: sidebarItems.filter((item) => item.key === "help") },
 ];
 
 const viewCopy: Record<NavKey, { title: string; eyebrow: string; description: string }> = {
@@ -301,9 +310,9 @@ export function Dashboard({ session }: { session: Session }) {
   const platformBoardItems = isPlatformView ? [activeNav] : platforms;
 
   return (
-    <main className="min-h-screen bg-[#F6F7F9] text-[#111827]">
+    <main className="min-h-screen bg-[#F6F8FB] text-[#111827]">
       <ExecutiveHeader session={session} onAdd={() => openAdd()} onSignOut={() => supabase.auth.signOut()} onMenu={() => setSidebarOpen(true)} />
-      <div className="mx-auto flex max-w-[1840px] gap-5 px-4 py-5 lg:px-6">
+      <div className="mx-auto flex max-w-[1720px] gap-5 px-4 py-5 lg:px-6">
         <ExecutiveSidebar activeNav={activeNav} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onSelect={selectNav} />
         <section className="min-w-0 flex-1 space-y-5">
           <ViewHero view={view} activeNav={activeNav} visibleCount={filteredTasks.length} totalCount={tasks.length} metrics={activeViewMetrics} />
@@ -312,6 +321,7 @@ export function Dashboard({ session }: { session: Session }) {
 
           {showOverview ? (
             <>
+              <WorkbenchBanner session={session} metrics={metrics} />
               <section className="grid gap-4 xl:grid-cols-[1.65fr_1fr]">
                 <div className="space-y-4">
                   <MetricGrid metrics={metrics} />
@@ -407,6 +417,7 @@ export function Dashboard({ session }: { session: Session }) {
               </div>
             )}
           </Card> : null}
+          <PortalFooter />
         </section>
       </div>
       <TaskDetailDrawer
@@ -431,21 +442,24 @@ export function Dashboard({ session }: { session: Session }) {
 
 function ExecutiveHeader({ session, onAdd, onSignOut, onMenu }: { session: Session; onAdd: () => void; onSignOut: () => void; onMenu: () => void }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-[1840px] items-center justify-between gap-4 px-4 py-3 lg:px-6">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur">
+      <div className="mx-auto flex max-w-[1720px] items-center justify-between gap-4 px-4 py-3 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenu} aria-label="打开导航"><Menu className="h-5 w-5" /></Button>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
             <BarChart3 className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-slate-950 md:text-xl">跨境电商多平台运营中台</h1>
-            <p className="truncate text-xs text-slate-500 md:text-sm">TikTok · Amazon · 独立站项目推进驾驶舱</p>
+            <h1 className="truncate text-lg font-semibold tracking-tight text-slate-950 md:text-xl">跨境电商运营中台</h1>
+            <p className="truncate text-xs text-slate-500 md:text-sm">TikTok · Amazon · 独立站 · 团队协同驾驶舱</p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 md:gap-3">
           <span className="hidden max-w-[260px] truncate text-sm text-slate-500 lg:inline">{session.user.email}</span>
           <Button className="bg-blue-600 hover:bg-blue-700" onClick={onAdd}><Plus className="h-4 w-4" />新增任务</Button>
+          <Button variant="outline" size="icon" title="通知提醒占位" aria-label="通知提醒占位">
+            <Bell className="h-4 w-4 text-slate-600" />
+          </Button>
           <Button variant="outline" onClick={onSignOut}><LogOut className="h-4 w-4" /><span className="hidden sm:inline">退出</span></Button>
         </div>
       </div>
@@ -458,36 +472,46 @@ function ExecutiveSidebar({ activeNav, open, onClose, onSelect }: { activeNav: N
     <>
       <div className={cn("fixed inset-0 z-40 bg-slate-950/30 lg:hidden", open ? "block" : "hidden")} onClick={onClose} />
       <aside className={cn(
-        "fixed left-0 top-0 z-50 h-full w-72 border-r border-slate-200 bg-white p-4 shadow-xl transition-transform lg:sticky lg:top-[73px] lg:z-20 lg:h-[calc(100vh-96px)] lg:translate-x-0 lg:rounded-xl lg:border lg:shadow-sm",
+        "fixed left-0 top-0 z-50 h-full w-[260px] border-r border-slate-200 bg-white p-4 shadow-xl transition-transform lg:sticky lg:top-[73px] lg:z-20 lg:h-[calc(100vh-96px)] lg:translate-x-0 lg:rounded-xl lg:border lg:shadow-sm",
         open ? "translate-x-0" : "-translate-x-full",
       )}>
         <div className="mb-4 flex items-center justify-between lg:hidden">
           <span className="font-semibold text-slate-950">导航</span>
           <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
         </div>
-        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">Command center</div>
           <div className="mt-2 text-sm font-semibold text-slate-950">每日推进视图</div>
           <p className="mt-1 text-xs leading-5 text-slate-500">按平台、风险和负责人快速切换工作重点。</p>
         </div>
-        <nav className="space-y-1">
-          {sidebarItems.map((item) => {
-            const Icon = item.icon;
-            const active = activeNav === item.key;
-            return (
-              <button
-                key={item.key}
-                className={cn(
-                  "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium transition",
-                  active ? "bg-blue-50 text-blue-700 ring-1 ring-blue-100" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
-                )}
-                onClick={() => onSelect(item.key)}
-              >
-                <span className="flex items-center gap-3"><Icon className="h-4 w-4" />{item.label}</span>
-                <ChevronRight className={cn("h-4 w-4", active ? "opacity-100" : "opacity-0")} />
-              </button>
-            );
-          })}
+        <nav className="space-y-4">
+          {sidebarGroups.map((group) => (
+            <div key={group.title}>
+              <div className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{group.title}</div>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = activeNav === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium transition",
+                        active ? "bg-blue-50 text-blue-700 ring-1 ring-blue-100" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950",
+                      )}
+                      onClick={() => onSelect(item.key)}
+                    >
+                      <span className="flex min-w-0 items-center gap-3 whitespace-nowrap">
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </span>
+                      <ChevronRight className={cn("h-4 w-4 shrink-0", active ? "opacity-100" : "opacity-0")} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
       </aside>
     </>
@@ -532,6 +556,53 @@ function ViewHero({
         </div>
       </div>
     </Card>
+  );
+}
+
+function WorkbenchBanner({ session, metrics }: { session: Session; metrics: ReturnType<typeof createMetrics> }) {
+  const today = new Intl.DateTimeFormat("zh-CN", { dateStyle: "full" }).format(new Date());
+  const focusCount = metrics.overdue + metrics.blockers + metrics.highPriority;
+
+  return (
+    <Card className="overflow-hidden border-blue-100 bg-gradient-to-br from-white via-blue-50 to-slate-50 p-5 shadow-[0_16px_44px_rgba(37,99,235,0.08)]">
+      <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr] xl:items-center">
+        <div>
+          <Badge className="bg-blue-600 text-white">企业内部运营门户</Badge>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950 md:text-[28px]">今日运营概览</h2>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+            当前系统管理 TikTok、Amazon、独立站三大渠道。优先处理卡点、逾期和高优先级任务，确保跨平台推进节奏稳定。
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2 text-sm text-slate-600">
+            <span className="rounded-lg border border-white/80 bg-white/80 px-3 py-1.5 shadow-sm">{today}</span>
+            <span className="max-w-full truncate rounded-lg border border-white/80 bg-white/80 px-3 py-1.5 shadow-sm">当前用户：{session.user.email}</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <PortalStat label="重点关注" value={focusCount} tone="blue" />
+          <PortalStat label="卡点任务" value={metrics.blockers} tone="amber" />
+          <PortalStat label="逾期任务" value={metrics.overdue} tone="red" />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function PortalStat({ label, value, tone }: { label: string; value: number; tone: "blue" | "amber" | "red" }) {
+  return (
+    <div className={cn(
+      "rounded-xl border bg-white/85 p-4 text-center shadow-sm",
+      tone === "blue" && "border-blue-100",
+      tone === "amber" && "border-amber-100",
+      tone === "red" && "border-red-100",
+    )}>
+      <div className={cn(
+        "text-3xl font-semibold tracking-tight",
+        tone === "blue" && "text-blue-700",
+        tone === "amber" && "text-amber-700",
+        tone === "red" && "text-red-700",
+      )}>{value}</div>
+      <div className="mt-1 whitespace-nowrap text-xs font-medium text-slate-500">{label}</div>
+    </div>
   );
 }
 
@@ -637,6 +708,15 @@ function HelpGuide() {
         </div>
       </Card>
     </section>
+  );
+}
+
+function PortalFooter() {
+  return (
+    <footer className="flex flex-col gap-2 border-t border-slate-200 py-5 text-xs text-slate-500 md:flex-row md:items-center md:justify-between">
+      <span className="font-medium text-slate-600">ForLifa 跨境电商运营中台</span>
+      <span>Internal Operations System · Version v1.0 · 数据由 Supabase 实时保存</span>
+    </footer>
   );
 }
 
@@ -862,7 +942,7 @@ function CompactTaskItem({
     <button className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40" onClick={() => onOpen(task)}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-slate-950">{task.task_name}</p>
+          <p className="line-clamp-2 text-sm font-medium leading-5 text-slate-950">{task.task_name}</p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <PlatformBadge value={task.platform} />
             <StatusBadge value={task.status} />
@@ -913,7 +993,7 @@ function CompactTaskItem({
         </div>
       ) : null}
       <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
-        <span>{task.owner} · {task.role}</span>
+        <span className="truncate">{task.owner} · {task.role}</span>
         <span className={cn(isDueSoon(task) && "font-medium text-amber-600", isOverdue(task) && "font-medium text-red-600")}>{formatDate(task.due_date)}</span>
       </div>
     </button>
@@ -929,7 +1009,7 @@ function ReasonTag({ label }: { label: string }) {
     待确认: "bg-yellow-50 text-yellow-700 ring-yellow-100",
     进行中: "bg-blue-50 text-blue-700 ring-blue-100",
   }[label] || "bg-slate-100 text-slate-600 ring-slate-100";
-  return <span className={cn("inline-flex h-6 items-center rounded-md px-2 text-xs font-medium ring-1", cls)}>{label}</span>;
+  return <span className={cn("inline-flex h-6 items-center whitespace-nowrap rounded-md px-2 text-xs font-medium ring-1", cls)}>{label}</span>;
 }
 
 function PlatformBoard({ tasks, platformsToShow = platforms, onPlatformAdd }: { tasks: Task[]; platformsToShow?: readonly Platform[]; onPlatformAdd: (platform: Platform) => void }) {
