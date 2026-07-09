@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
+import { getTaskSaveErrorMessage } from "@/lib/task-errors";
 import { statuses, type Task } from "@/types/task";
 
 export type QuickUpdateInput = Pick<Task, "status" | "progress" | "latest_update" | "blocker" | "next_action">;
@@ -30,6 +31,7 @@ export function QuickUpdateModal({
 }) {
   const [form, setForm] = useState<QuickUpdateInput>(() => getInitialForm(task));
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   if (!open || !task) return null;
 
@@ -37,6 +39,7 @@ export function QuickUpdateModal({
     event.preventDefault();
     if (!task) return;
     setSaving(true);
+    setError("");
     try {
       await onSubmit(task, {
         ...form,
@@ -44,6 +47,9 @@ export function QuickUpdateModal({
         status: Number(form.progress) === 100 ? "已完成" : form.status,
       });
       onClose();
+    } catch (error) {
+      console.error("Quick update failed", error);
+      setError(getTaskSaveErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -86,6 +92,7 @@ export function QuickUpdateModal({
           <TextArea label="最新进展" value={form.latest_update || ""} onChange={(value) => setForm((current) => ({ ...current, latest_update: value }))} />
           <TextArea label="当前卡点" value={form.blocker || ""} onChange={(value) => setForm((current) => ({ ...current, blocker: value }))} danger />
           <TextArea label="下一步动作" value={form.next_action || ""} onChange={(value) => setForm((current) => ({ ...current, next_action: value }))} />
+          {error ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
         </div>
 
         <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">

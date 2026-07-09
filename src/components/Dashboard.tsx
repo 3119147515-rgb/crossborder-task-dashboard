@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Card, Badge } from "@/components/ui/surface";
 import { getSupabase } from "@/lib/supabase";
 import { formatDate, isCompleted, isDueSoon, isDueThisWeek, isOverdue } from "@/lib/date";
+import { getTaskSaveErrorMessage } from "@/lib/task-errors";
 import { getPlatformHealth, getTaskReasonTags, getTodayPriorityTasks } from "@/lib/task-risk";
 import { cn } from "@/lib/utils";
 import { ownerGroups, owners, platforms, type FiltersState, type Platform, type Task, type TaskInput } from "@/types/task";
@@ -158,10 +159,17 @@ export function Dashboard({ session }: { session: Session }) {
 
   async function loadTasks() {
     setLoading(true);
-    const { data, error } = await supabase.from("tasks").select("*").order("due_date", { ascending: true, nullsFirst: false });
-    if (error) console.error(error);
-    setTasks((data || []) as Task[]);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from("tasks").select("*").order("due_date", { ascending: true, nullsFirst: false });
+      if (error) {
+        console.error("Load tasks failed", error);
+        setNotice(`读取任务失败：${error.message}`);
+        return;
+      }
+      setTasks((data || []) as Task[]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -226,16 +234,23 @@ export function Dashboard({ session }: { session: Session }) {
   async function saveTask(input: TaskInput) {
     if (editingTask) {
       const { error } = await supabase.from("tasks").update(input).eq("id", editingTask.id);
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase task update failed", error);
+        throw error;
+      }
     } else {
       const { error } = await supabase.from("tasks").insert(input);
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase task insert failed", error);
+        throw error;
+      }
     }
     setModalOpen(false);
     await loadTasks();
+    setNotice(editingTask ? "任务已保存" : "任务已新增");
   }
 
-  async function quickUpdate(task: Task, patch: Partial<Task>) {
+  async function quickUpdate(task: Task, patch: Partial<Task>, options: { throwOnError?: boolean } = {}) {
     const next = { ...patch };
     if (patch.status === "已完成" || patch.progress === 100) {
       next.completed_at = task.completed_at || new Date().toISOString();
@@ -246,13 +261,15 @@ export function Dashboard({ session }: { session: Session }) {
     setTasks((current) => current.map((item) => (item.id === task.id ? { ...item, ...next, updated_at: new Date().toISOString() } : item)));
     const { error } = await supabase.from("tasks").update(next).eq("id", task.id);
     if (error) {
-      console.error(error);
+      console.error("Supabase quick update failed", error);
       await loadTasks();
+      setNotice(getTaskSaveErrorMessage(error));
+      if (options.throwOnError) throw error;
     }
   }
 
   async function saveQuickUpdate(task: Task, input: QuickUpdateInput) {
-    await quickUpdate(task, input);
+    await quickUpdate(task, input, { throwOnError: true });
     await loadTasks();
     setNotice("快速更新已保存");
   }
@@ -260,9 +277,14 @@ export function Dashboard({ session }: { session: Session }) {
   async function completeTask(task: Task) {
     if (isCompleted(task)) return;
     if (!window.confirm("确认将该任务标记为已完成吗？")) return;
-    await quickUpdate(task, { status: "已完成", progress: 100, completed_at: new Date().toISOString() });
-    await loadTasks();
-    setNotice("任务已标记完成");
+    try {
+      await quickUpdate(task, { status: "已完成", progress: 100, completed_at: new Date().toISOString() }, { throwOnError: true });
+      await loadTasks();
+      setNotice("任务已标记完成");
+    } catch (error) {
+      console.error("Complete task failed", error);
+      setNotice(getTaskSaveErrorMessage(error));
+    }
   }
 
   async function deleteTask(task: Task) {

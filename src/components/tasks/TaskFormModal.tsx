@@ -5,6 +5,7 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
+import { getTaskSaveErrorMessage } from "@/lib/task-errors";
 import { businessModulesByPlatform, goals, kpiMetrics, owners, ownersByRole, platforms, priorities, roles, stages, statuses, type Platform, type Role, type Task, type TaskInput } from "@/types/task";
 
 function blankTask(platform: Platform = "TikTok"): TaskInput {
@@ -113,24 +114,31 @@ export function TaskFormModal({
     if (Number.isNaN(progress) || progress < 0 || progress > 100) return setError("进度必须是 0 到 100");
 
     setSaving(true);
-    await onSubmit({
-      ...form,
-      progress,
-      completed_at: form.status === "已完成" || progress === 100 ? form.completed_at || new Date().toISOString() : null,
-      description: form.description || null,
-      latest_update: form.latest_update || null,
-      blocker: form.blocker || null,
-      next_action: form.next_action || null,
-      expected_result: form.expected_result || null,
-      actual_result: form.actual_result || null,
-      resource_needed: form.resource_needed || null,
-      target_value: form.target_value || null,
-      current_value: form.current_value || null,
-      result_summary: form.result_summary || null,
-      start_date: form.start_date || null,
-      due_date: form.due_date || null,
-    });
-    setSaving(false);
+    setError("");
+    try {
+      await onSubmit({
+        ...form,
+        progress,
+        completed_at: form.status === "已完成" || progress === 100 ? form.completed_at || new Date().toISOString() : null,
+        description: form.description || null,
+        latest_update: form.latest_update || null,
+        blocker: form.blocker || null,
+        next_action: form.next_action || null,
+        expected_result: form.expected_result || null,
+        actual_result: form.actual_result || null,
+        resource_needed: form.resource_needed || null,
+        target_value: form.target_value || null,
+        current_value: form.current_value || null,
+        result_summary: form.result_summary || null,
+        start_date: form.start_date || null,
+        due_date: form.due_date || null,
+      });
+    } catch (error) {
+      console.error("Task save failed", error);
+      setError(getTaskSaveErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -180,7 +188,7 @@ export function TaskFormModal({
         </div>
         {error ? <p className="mx-6 mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
         <div className="sticky bottom-0 flex justify-end gap-2 border-t border-zinc-200 bg-white px-6 py-4">
-          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>取消</Button>
           <Button onClick={save} disabled={saving}>{saving ? "保存中..." : "保存任务"}</Button>
         </div>
       </div>
