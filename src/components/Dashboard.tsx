@@ -17,6 +17,8 @@ import {
   PieChart,
   Plus,
   RefreshCw,
+  RotateCcw,
+  Search,
   ShieldCheck,
   Target,
   TrendingUp,
@@ -42,11 +44,11 @@ import { QuickUpdateModal, type QuickUpdateInput } from "./tasks/QuickUpdateModa
 import { TaskDetailDrawer } from "./tasks/TaskDetailDrawer";
 import { TaskFormModal } from "./tasks/TaskFormModal";
 import { PlatformBadge, RiskBadge, StatusBadge } from "./tasks/badges";
-import { LoadingState } from "./tasks/states";
+import { EmptyState, LoadingState } from "./tasks/states";
 
 type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review";
 type ExecutionView = "platform" | "role" | "status" | "priority";
-type QuickFilter = "today" | "overdue" | "blocker" | "high" | "week" | "pending" | null;
+type QuickFilter = "today" | "overdue" | "blocker" | "high" | "week" | "pending" | "ops" | "project" | "bd" | null;
 
 const sidebarItems: Array<{ key: NavKey; label: string; icon: typeof LayoutDashboard }> = [
   { key: "overview", label: "运营总览", icon: LayoutDashboard },
@@ -172,7 +174,7 @@ export function Dashboard({ session }: { session: Session }) {
       .filter((task) => {
         if (!search) return true;
         if (search === "blocker:true") return Boolean(task.blocker?.trim());
-        return [task.task_name, task.description, task.latest_update, task.blocker, task.next_action, task.owner]
+        return [task.task_name, task.description, task.latest_update, task.blocker, task.next_action, task.owner, task.business_module, task.platform]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -274,6 +276,11 @@ export function Dashboard({ session }: { session: Session }) {
     setFilters(defaultFilters);
   }
 
+  function clearExecutionFilters() {
+    setFilters(defaultFilters);
+    setQuickFilter(null);
+  }
+
   const groupItems = getGroupItems(executionView, filteredTasks);
   const view = viewCopy[activeNav];
   const isPlatformView = isPlatformNav(activeNav);
@@ -349,9 +356,16 @@ export function Dashboard({ session }: { session: Session }) {
                   ))}
                 </div>
               </div>
-              <div className="mt-4">
-                <QuickFilters active={quickFilter} onChange={setQuickFilter} />
-              </div>
+              <ExecutionSearchToolbar
+                activeNav={activeNav}
+                active={quickFilter}
+                filters={filters}
+                resultCount={filteredTasks.length}
+                tasks={tasks}
+                onChange={setQuickFilter}
+                onClear={clearExecutionFilters}
+                onSearch={(search) => setFilters((current) => ({ ...current, search }))}
+              />
             </div>
             <div className="border-b border-slate-200 bg-slate-50/80 p-4 lg:p-5">
               <Filters filters={filters} setFilters={setFilters} tasks={tasks} />
@@ -360,7 +374,11 @@ export function Dashboard({ session }: { session: Session }) {
               <span>当前显示 <strong className="text-slate-900">{filteredTasks.length}</strong> / {tasks.length} 个任务</span>
               <span>点击任务行可打开右侧详情，行内控件可直接写入 Supabase。</span>
             </div>
-            {loading ? <LoadingState /> : (
+            {loading ? <LoadingState /> : filteredTasks.length === 0 ? (
+              <div className="p-4 lg:p-5">
+                <EmptyState text={filters.search.trim() ? `没有找到与「${filters.search.trim()}」相关的任务` : "当前筛选条件下暂无任务"} />
+              </div>
+            ) : (
               <div className="space-y-4 p-4 lg:p-5">
                 {groupItems.map((group) => (
                   <GroupedTaskSection
@@ -858,22 +876,90 @@ function OwnerWorkload({ tasks }: { tasks: Task[] }) {
   );
 }
 
-function QuickFilters({ active, onChange }: { active: QuickFilter; onChange: (filter: QuickFilter) => void }) {
-  const items: Array<{ key: QuickFilter; label: string }> = [
-    { key: "today", label: "今日重点" },
-    { key: "overdue", label: "逾期" },
-    { key: "blocker", label: "有卡点" },
-    { key: "high", label: "高优先级" },
-    { key: "week", label: "本周到期" },
-    { key: "pending", label: "待确认" },
+function ExecutionSearchToolbar({
+  activeNav,
+  active,
+  filters,
+  resultCount,
+  tasks,
+  onChange,
+  onClear,
+  onSearch,
+}: {
+  activeNav: NavKey;
+  active: QuickFilter;
+  filters: FiltersState;
+  resultCount: number;
+  tasks: Task[];
+  onChange: (filter: QuickFilter) => void;
+  onClear: () => void;
+  onSearch: (search: string) => void;
+}) {
+  const scopedTasks = tasks.filter((task) => matchesNav(task, activeNav));
+  const items: Array<{ key: QuickFilter; label: string; count: number }> = [
+    { key: null, label: "全部", count: scopedTasks.length },
+    { key: "today", label: "今日重点", count: scopedTasks.filter((task) => matchesQuickFilter(task, "today")).length },
+    { key: "overdue", label: "逾期", count: scopedTasks.filter((task) => matchesQuickFilter(task, "overdue")).length },
+    { key: "blocker", label: "有卡点", count: scopedTasks.filter((task) => matchesQuickFilter(task, "blocker")).length },
+    { key: "high", label: "高优先级", count: scopedTasks.filter((task) => matchesQuickFilter(task, "high")).length },
+    { key: "week", label: "本周到期", count: scopedTasks.filter((task) => matchesQuickFilter(task, "week")).length },
+    { key: "pending", label: "待确认", count: scopedTasks.filter((task) => matchesQuickFilter(task, "pending")).length },
+    { key: "ops", label: "运营负责人", count: scopedTasks.filter((task) => matchesQuickFilter(task, "ops")).length },
+    { key: "project", label: "项目负责人", count: scopedTasks.filter((task) => matchesQuickFilter(task, "project")).length },
+    { key: "bd", label: "BD负责人", count: scopedTasks.filter((task) => matchesQuickFilter(task, "bd")).length },
   ];
+  const hasAnyFilter = Boolean(active !== null || filters.search.trim() || filters.platform !== "全部" || filters.role !== "全部" || filters.owner || filters.businessModule !== "全部" || filters.stage !== "全部" || filters.status !== "全部" || filters.priority !== "全部" || filters.due !== "全部");
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {items.map((item) => (
-        <Button key={item.key} size="sm" variant={active === item.key ? "default" : "outline"} className={active === item.key ? "bg-blue-600 hover:bg-blue-700" : ""} onClick={() => onChange(active === item.key ? null : item.key)}>
-          {item.label}
-        </Button>
-      ))}
+    <div className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <label className="relative block min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-10 text-sm outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            value={filters.search}
+            onChange={(event) => onSearch(event.target.value)}
+            placeholder="搜索任务名称、说明、进展、卡点、负责人、模块或平台"
+          />
+          {filters.search ? (
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              onClick={() => onSearch("")}
+              aria-label="清空搜索"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </label>
+        <div className="flex shrink-0 items-center justify-between gap-3">
+          <span className="text-sm text-slate-500">找到 <strong className="text-slate-950">{resultCount}</strong> 条相关任务</span>
+          <Button size="sm" variant="outline" onClick={onClear} disabled={!hasAnyFilter}>
+            <RotateCcw className="h-4 w-4" />清空筛选
+          </Button>
+        </div>
+      </div>
+      <div className="-mx-1 overflow-x-auto px-1">
+        <div className="flex min-w-max gap-2 pb-1">
+          {items.map((item) => {
+            const selected = active === item.key;
+            return (
+              <button
+                key={item.label}
+                type="button"
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm font-medium transition",
+                  selected ? "border-blue-600 bg-blue-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700",
+                )}
+                onClick={() => onChange(item.key)}
+              >
+                <span>{item.label}</span>
+                <span className={cn("rounded px-1.5 py-0.5 text-[11px]", selected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500")}>{item.count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -972,6 +1058,9 @@ function matchesQuickFilter(task: Task, filter: QuickFilter) {
   if (filter === "high") return task.priority === "高";
   if (filter === "week") return isDueThisWeek(task);
   if (filter === "pending") return task.status === "待确认";
+  if (filter === "ops") return task.role === "运营负责人";
+  if (filter === "project") return task.role === "项目负责人";
+  if (filter === "bd") return task.role === "BD负责人";
   return true;
 }
 
