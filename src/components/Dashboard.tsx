@@ -732,12 +732,102 @@ function PortalStat({ label, value, tone }: { label: string; value: number; tone
 }
 
 function HelpGuide() {
-  const ownerGuides = [
-    { title: "运营负责人", text: "每天更新平台运营、素材、活动、广告、转化率相关任务。", tone: "blue" },
-    { title: "项目负责人", text: "更新建站、供应链、履约、库存、节点相关任务。", tone: "indigo" },
-    { title: "BD 负责人", text: "更新达人建联、样品寄送、合作回收、联盟营销相关任务。", tone: "amber" },
+  const roleQuickCards = [
+    ["总项目负责人", "看全局风险和资源协调"],
+    ["TikTok 运营负责人", "看 TikTok 内容、店铺、广告、直播"],
+    ["TikTok 运营兼 BD", "看 TikTok + BD 合作推进"],
+    ["Amazon 运营负责人", "看 Listing、广告、Review、FBA"],
+    ["TikTok 运营助理", "看内容执行、样品、数据整理"],
+    ["BD 团队", "看达人建联、样品、视频回收"],
+    ["产品研发负责人", "看打样、测试、供应链"],
+    ["剪辑团队", "看视频剪辑、素材交付、二剪"],
   ];
-  const dailySteps = ["查看项目健康度", "查看今日工作台", "处理逾期和卡点任务", "更新任务进展", "标记完成", "每周做数据复盘"];
+  const dailySteps = [
+    ["查看运营总览", "看项目健康度、逾期任务、卡点任务、高优先级任务、本周到期任务。"],
+    ["进入自己的角色视图", "根据身份查看 TikTok、Amazon、BD、产品研发或剪辑相关任务。"],
+    ["处理今日重点", "优先处理已逾期、有卡点、高优先级、本周到期、待确认任务。"],
+    ["更新任务进度", "每天至少更新状态、进度、最新进展、当前卡点和下一步动作。"],
+    ["完成后标记闭环", "任务完成后使用一键完成或编辑任务，将状态更新为已完成。"],
+  ];
+  const roleGuides = [
+    {
+      title: "总项目负责人",
+      focus: ["运营总览", "项目健康度", "逾期任务", "卡点任务", "各负责人完成率", "三平台推进状态"],
+      routine: ["看哪些任务影响整体上线或销售节奏", "协调需要资源支持的卡点", "检查 BD、研发、剪辑是否影响运营节奏", "对关键任务确认或催办"],
+      fields: ["项目阶段", "截止时间", "当前卡点", "下一步动作", "资源需求", "验收结果"],
+    },
+    {
+      title: "TikTok 运营负责人",
+      focus: ["TikTok 任务", "内容素材准备", "TikTok Shop 店铺任务", "短视频内容", "直播", "TikTok 广告", "内容复盘", "剪辑任务进度", "BD 达人素材回收"],
+      routine: ["检查 TikTok 内容排期", "检查短视频是否按时交付", "检查达人素材是否回收", "检查店铺、活动、直播、广告推进", "更新 TikTok 相关任务"],
+      fields: ["platform 选择 TikTok", "business_module 选择短视频内容、达人建联、直播、素材测试、内容复盘", "latest_update 写今天实际进展", "blocker 写影响发布/投放/直播的问题", "next_action 写下一步动作"],
+    },
+    {
+      title: "TikTok 运营负责人兼 BD 负责人",
+      focus: ["TikTok 任务", "BD 负责人任务", "达人建联", "样品寄送", "视频回收", "合作报价", "卡点任务"],
+      routine: ["检查 TikTok 内容推进", "检查 BD 人员跟进情况", "检查 10 个 BD 是否按计划建联", "检查样品寄送和达人视频回收", "判断 BD 卡点是否影响内容节奏"],
+      fields: ["BD 任务 role 可选 BD负责人", "TikTok 运营任务 role 可选运营负责人", "owner 写具体负责人姓名", "blocker 写清楚哪位达人、哪个样品、哪个视频卡住"],
+    },
+    {
+      title: "Amazon 运营负责人",
+      focus: ["Amazon 任务", "Listing 优化", "关键词调研", "主图 / 视频", "A+ 页面", "Review 获取", "PPC 广告", "FBA 库存", "竞品分析", "Coupon / Deal", "数据复盘"],
+      routine: ["检查 Listing 是否优化完成", "检查图片、视频、A+ 页面是否到位", "检查 PPC 广告数据", "检查库存和 FBA 入仓状态", "检查 Review 和 QA 进展"],
+      fields: ["platform 选择 Amazon", "business_module 选择 Amazon 对应模块", "kpi_metric 可写 CTR、CVR、CPA、ROAS、订单数、Review 数、库存周转", "actual_result 记录复盘结果"],
+    },
+    {
+      title: "TikTok 运营助理",
+      focus: ["TikTok 任务", "今日重点", "短视频内容", "达人建联辅助", "样品寄送跟进", "数据整理", "待确认任务"],
+      routine: ["整理达人名单", "更新样品寄送状态", "收集视频素材", "整理播放、互动、转化数据", "及时更新执行进度"],
+      fields: ["latest_update 写实际完成事项", "next_action 写下一步要跟谁、交付什么", "blocker 写需要负责人协助的问题", "不要只写已跟进，要写清楚对象和结果"],
+    },
+    {
+      title: "产品研发进度负责人",
+      focus: ["产品研发任务", "供应链任务", "打样任务", "包装确认", "产品测试", "SKU / 配件 / 说明书", "影响上线的卡点"],
+      routine: ["更新产品打样进度", "更新测试反馈", "更新供应商交付时间", "更新包装、说明书、配件确认进度", "及时标记影响上线的问题"],
+      fields: ["platform 根据影响渠道选择", "role 可先选项目负责人并在 owner 写产品研发负责人", "blocker 写清供应商、样品、测试、包装、认证、交期问题", "next_action 写清下一步确认事项"],
+    },
+    {
+      title: "剪辑负责人 / 剪辑人员",
+      focus: ["短视频内容", "素材测试", "TikTok 广告", "达人素材二剪", "内容复盘", "今日重点", "本周到期"],
+      routine: ["查看待剪辑任务", "更新每条视频剪辑状态", "标记素材缺失、脚本不清、授权问题等卡点", "交付后更新为待确认或已完成"],
+      fields: ["task_name 写视频名称 / 素材主题", "description 写剪辑需求", "progress 写剪辑进度", "blocker 写缺素材 / 缺脚本 / 画质 / 授权问题", "due_date 写交付日期"],
+    },
+  ];
+  const bdExamples = [
+    "BD01 跟进 TikTok 达人 Anna 样品地址确认",
+    "BD02 跟进达人视频发布时间",
+    "BD03 整理 50 个卷发棒类达人名单",
+    "BD04 催收达人合作报价",
+    "BD05 跟进首批样品签收",
+    "BD06 回收达人授权素材",
+    "BD07 跟进 Affiliate 合作申请",
+    "BD08 复盘达人视频播放数据",
+    "BD09 统计本周达人回复率",
+    "BD10 跟进未回复达人二次触达",
+  ];
+  const fieldRows = [
+    ["platform", "任务所属渠道", "TikTok / Amazon / 独立站", "运营、BD、Amazon、剪辑"],
+    ["role", "负责人角色", "运营负责人 / 项目负责人 / BD负责人", "所有角色"],
+    ["owner", "具体负责人姓名", "BD03 / 张三 / 剪辑负责人", "所有角色"],
+    ["task_name", "任务名称", "BD01 跟进达人 Anna 样品地址确认", "所有角色"],
+    ["description", "任务背景和要求", "确认达人报价、寄样地址和视频发布时间", "所有角色"],
+    ["business_module", "业务模块", "达人建联 / Listing 优化 / 短视频内容 / 产品测试", "负责人"],
+    ["project_stage", "项目阶段", "素材准备 / 执行中 / 复盘", "负责人"],
+    ["priority", "任务优先级", "高 / 中 / 低", "负责人"],
+    ["status", "当前状态", "未开始 / 进行中 / 待确认 / 已完成 / 已暂停", "所有角色"],
+    ["progress", "进度百分比", "60", "所有角色"],
+    ["start_date", "开始时间", "2026-07-09", "负责人"],
+    ["due_date", "截止时间", "2026-07-12", "所有角色"],
+    ["latest_update", "最新进展", "已二次触达达人，等待报价确认", "所有角色"],
+    ["blocker", "当前卡点", "达人 Anna 未回复报价，等待 7/10 前确认", "所有角色"],
+    ["next_action", "下一步动作", "7/10 上午再次触达并同步负责人", "所有角色"],
+    ["expected_result", "预期结果", "完成 10 位达人建联并确认寄样", "负责人"],
+    ["actual_result", "实际结果", "完成 8 位达人回复，2 位待二次触达", "负责人"],
+    ["kpi_metric", "核心指标", "CTR / CVR / ROAS / Review 数 / 回复率", "运营、Amazon、BD"],
+    ["target_value", "目标值", "达人回复率 30%", "负责人"],
+    ["current_value", "当前值", "达人回复率 22%", "负责人"],
+    ["result_summary", "复盘结论", "视频开头 3 秒展示产品效果更好", "负责人"],
+  ];
   const statusItems = [
     ["未开始", "任务已进入计划池，尚未正式推进。"],
     ["进行中", "负责人正在推进，需要持续更新进展。"],
@@ -745,18 +835,37 @@ function HelpGuide() {
     ["已完成", "任务闭环，进度应为 100%。"],
     ["已暂停", "任务暂时冻结，需要说明暂停原因和恢复条件。"],
   ];
-  const riskItems = [
-    ["高风险", "已逾期且存在卡点，需要优先处理。"],
-    ["已逾期", "超过计划截止时间但未完成。"],
-    ["即将到期", "未来 3 天内到期，需要检查推进状态。"],
-    ["有卡点", "存在资源、决策、资料或外部合作阻塞。"],
-    ["正常", "暂无明显风险，按计划推进。"],
+  const priorityItems = [
+    ["高", "影响上线、销售、投放、关键合作、核心节点的任务。"],
+    ["中", "正常推进任务，需要按计划完成。"],
+    ["低", "优化类、补充类、非紧急任务。"],
   ];
-  const actionCards = [
-    ["如何新增任务", "点击顶部“新增任务”，选择平台、负责人、业务模块、优先级和截止时间，补齐预期结果与 KPI。"],
-    ["如何快速更新任务", "在任务卡片、表格或详情 Drawer 点击“快速更新”，只更新状态、进度、最新进展、卡点和下一步。"],
-    ["如何标记完成", "未完成任务可点击“一键完成”，确认后状态变为已完成，进度更新为 100%。"],
-    ["如何筛选平台", "使用 Sidebar 的 TikTok / Amazon / 独立站，或任务执行区筛选器按平台查看任务。"],
+  const interactionItems = [
+    ["Sidebar 菜单", "切换运营总览、今日重点、平台、负责人、卡点、逾期、数据复盘和使用说明。"],
+    ["运营总览", "查看项目健康度、核心指标、图表、今日工作台和任务执行区。"],
+    ["今日重点", "聚焦逾期、卡点、高优先级、本周到期和待确认任务。"],
+    ["TikTok / Amazon / 独立站", "按平台查看对应任务和平台推进看板。"],
+    ["负责人视图", "按负责人角色查看任务负载、卡点和完成率。"],
+    ["卡点任务 / 逾期任务", "快速定位需要资源介入或已经超期的任务。"],
+    ["数据复盘", "查看数据复盘、内容复盘、效果复盘相关任务。"],
+    ["通知中心", "点击右上角铃铛查看逾期、卡点、本周到期和高优先级提醒。"],
+    ["全局搜索 / 快捷筛选", "搜索任务名、负责人、模块、卡点和下一步动作，并叠加快捷筛选。"],
+    ["新增 / 编辑 / 快速更新", "新增完整任务，编辑完整字段，或轻量更新状态、进度、进展、卡点、下一步。"],
+    ["一键完成", "未完成任务确认后自动更新为已完成，进度为 100%。"],
+    ["任务详情 Drawer", "点击任务行打开详情，查看时间线、风险、KPI、进展和操作按钮。"],
+  ];
+  const onboardingSteps = ["注册账号并登录", "找到自己的角色视图", "查看自己负责的任务", "更新 owner 是自己的任务", "新增遗漏任务", "每天更新进度", "遇到卡点及时写 blocker", "任务完成后标记完成"];
+  const teamRules = [
+    "每个人只更新自己负责的任务",
+    "每天至少更新一次进行中任务",
+    "重要卡点必须写 blocker",
+    "每条任务必须有明确 due_date",
+    "完成后必须标记已完成",
+    "待确认任务需要负责人及时验收",
+    "BD 人员必须写清楚达人名称和下一步动作",
+    "剪辑任务必须写清楚交付时间和确认人",
+    "产品研发任务必须写清楚供应商 / 样品 / 测试状态",
+    "总项目负责人每周检查一次逾期和卡点任务",
   ];
 
   return (
@@ -770,69 +879,175 @@ function HelpGuide() {
             </div>
             <h2 className="mt-2 text-2xl font-semibold text-slate-950">跨境电商多平台运营中台使用说明</h2>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              本系统用于 TikTok、Amazon、独立站三个渠道的跨境电商任务推进，帮助运营负责人、项目负责人和 BD 负责人统一查看进度、风险、卡点和下一步动作。
+              适用于 TikTok、Amazon、独立站、BD、产品研发、剪辑团队的日常任务推进与协作规范。
             </p>
           </div>
-          <Badge className="w-fit bg-blue-50 text-blue-700 ring-1 ring-blue-100">团队协作指南</Badge>
+          <Badge className="w-fit bg-blue-50 text-blue-700 ring-1 ring-blue-100">内部操作手册</Badge>
         </div>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        {ownerGuides.map((item) => (
-          <Card key={item.title} className="border-slate-200 p-4 shadow-sm">
-            <div className={cn(
-              "mb-4 flex h-10 w-10 items-center justify-center rounded-lg",
-              item.tone === "blue" && "bg-blue-50 text-blue-600",
-              item.tone === "indigo" && "bg-indigo-50 text-indigo-600",
-              item.tone === "amber" && "bg-amber-50 text-amber-600",
-            )}>
-              <Users className="h-5 w-5" />
-            </div>
-            <h3 className="font-semibold text-slate-950">{item.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
-          </Card>
-        ))}
-      </div>
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <SectionTitle eyebrow="System purpose" title="系统是做什么的" description="统一管理跨境电商项目中 TikTok、Amazon、独立站、BD、产品研发、剪辑等任务。" compact />
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {["当前任务推进到哪一步", "谁负责、哪个平台、哪个业务模块", "是否有卡点、下一步动作是什么", "截止时间、是否逾期、是否需要管理层介入"].map((item) => (
+            <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">{item}</div>
+          ))}
+        </div>
+      </Card>
 
       <Card className="border-slate-200 p-5 shadow-sm">
-        <SectionTitle eyebrow="Daily routine" title="每天使用流程" description="建议团队每天按固定节奏处理任务，减少信息遗漏和责任不清。" compact />
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {dailySteps.map((step, index) => (
-            <div key={step} className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">{index + 1}</span>
-              <span className="pt-1 text-sm font-medium text-slate-800">{step}</span>
+        <SectionTitle eyebrow="Role quick view" title="角色速查卡片" description="新成员先从这里判断自己每天应该重点看哪些内容。" compact />
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {roleQuickCards.map(([title, text]) => (
+            <div key={title} className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-blue-600" />
+                <h3 className="font-semibold text-slate-950">{title}</h3>
+              </div>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
             </div>
           ))}
+        </div>
+      </Card>
+
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <SectionTitle eyebrow="Daily routine" title="每天使用流程" description="建议团队每天按固定步骤推进，减少遗漏、重复沟通和责任不清。" compact />
+        <div className="mt-5 grid gap-3">
+          {dailySteps.map(([title, text], index) => (
+            <div key={title} className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 md:grid-cols-[110px_1fr]">
+              <span className="flex h-8 w-fit items-center rounded-full bg-blue-600 px-3 text-xs font-semibold text-white">Step {index + 1}</span>
+              <div>
+                <h3 className="font-semibold text-slate-950">{title}</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <SectionTitle eyebrow="Role handbook" title="不同角色怎么使用" description="每个角色都应围绕主要查看、每天要做和字段填写重点来更新任务。" compact />
+        <div className="mt-5 grid gap-3">
+          {roleGuides.map((item) => (
+            <details key={item.title} className="group rounded-lg border border-slate-200 bg-white p-4 open:bg-slate-50">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-semibold text-slate-950">
+                <span>{item.title}</span>
+                <ChevronRight className="h-4 w-4 text-slate-400 transition group-open:rotate-90" />
+              </summary>
+              <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                <GuideBullets title="主要查看" items={item.focus} />
+                <GuideBullets title="每天要做" items={item.routine} />
+                <GuideBullets title="任务填写重点" items={item.fields} />
+              </div>
+            </details>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="border-amber-200 bg-amber-50/40 p-5 shadow-sm">
+        <SectionTitle eyebrow="BD workflow" title="BD 团队使用规范" description="BD 人员需要清楚记录每天联系谁、跟进谁、哪些达人卡住、哪些样品已寄出、哪些视频未回收。" compact />
+        <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr]">
+          <GuideBullets title="BD 每天要做" items={["新增或更新自己的达人建联任务", "更新达人回复情况", "更新样品寄送状态", "更新视频回收情况", "标记当前卡点", "写清楚下一步动作"]} />
+          <GuideBullets title="BD 任务必须填写" items={["owner：具体 BD 人员姓名", "task_name：达人名称 / 合作事项", "description：合作背景", "status：当前状态", "latest_update：今天跟进结果", "blocker：未回复 / 样品未寄出 / 地址未确认 / 报价未确认 / 视频未交付", "next_action：下一步联系、寄样、催视频、确认报价", "due_date：下一次必须完成的时间"]} />
+        </div>
+        <div className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          {bdExamples.map((example) => <div key={example} className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700">{example}</div>)}
+        </div>
+      </Card>
+
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <SectionTitle eyebrow="Field standard" title="任务字段填写规范" description="每条任务都要让别人看得懂：谁负责、现在到哪里、卡在哪里、下一步做什么。" compact />
+        <div className="mt-5 overflow-x-auto">
+          <table className="w-full min-w-[980px] border-separate border-spacing-0 text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500">
+                {["字段", "字段用途", "填写示例", "重点填写角色"].map((item) => <th key={item} className="border-b border-slate-200 px-3 py-3">{item}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {fieldRows.map(([field, purpose, example, rolesText]) => (
+                <tr key={field} className="align-top">
+                  <td className="w-[150px] border-b border-slate-100 px-3 py-3 font-semibold text-slate-900">{field}</td>
+                  <td className="w-[240px] border-b border-slate-100 px-3 py-3 text-slate-600">{purpose}</td>
+                  <td className="border-b border-slate-100 px-3 py-3 text-slate-600">{example}</td>
+                  <td className="w-[180px] border-b border-slate-100 px-3 py-3 text-slate-600">{rolesText}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <GuideList title="任务状态说明" items={statusItems} />
-        <GuideList title="风险等级说明" items={riskItems} />
+        <GuideList title="状态使用规范" items={statusItems} />
+        <GuideList title="优先级使用规范" items={priorityItems} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-4">
-        {actionCards.map(([title, text]) => (
-          <Card key={title} className="border-slate-200 p-4 shadow-sm">
-            <h3 className="font-semibold text-slate-950">{title}</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
-          </Card>
-        ))}
-      </div>
-
-      <PermissionPlanning />
+      <Card className="border-red-100 bg-red-50/40 p-5 shadow-sm">
+        <SectionTitle eyebrow="Blocker rules" title="风险和卡点填写规范" description="blocker 必须写清楚对象、原因、已做动作、等待结果和时间点。" compact />
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <GuideBullets title="不要这样写" items={["有问题", "卡住了", "等回复", "处理中"]} />
+          <GuideBullets title="应该这样写" items={["达人 Anna 未回复报价，已二次触达，等待 7/10 前确认", "供应商样品发货延迟，预计 7/12 才能寄出", "剪辑缺少产品使用场景素材，需要运营 7/9 前补充", "Amazon 主图还未确认，影响 Listing 上线"]} />
+        </div>
+      </Card>
 
       <Card className="border-slate-200 p-5 shadow-sm">
-        <SectionTitle eyebrow="Collaboration rules" title="团队协作规范" description="让每个任务都有明确负责人、当前状态、卡点说明和下一步动作。" compact />
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          {["重要任务必须填写截止时间和预期结果。", "出现 blocker 时及时写清阻塞原因和需要谁支持。", "每周数据复盘任务要沉淀结论，并转化成下一轮优化动作。"].map((item) => (
-            <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
-              {item}
+        <SectionTitle eyebrow="Team rules" title="30 人团队协作规范" description="多人协作时，规则越清楚，任务推进越稳定。" compact />
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {teamRules.map((item) => <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">{item}</div>)}
+        </div>
+      </Card>
+
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <SectionTitle eyebrow="New member" title="新成员第一天怎么用" description="适合新同事入职当天按步骤完成系统熟悉和任务接管。" compact />
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {onboardingSteps.map((step, index) => (
+            <div key={step} className="rounded-lg border border-slate-200 bg-white p-4">
+              <span className="text-xs font-semibold text-blue-600">Step {index + 1}</span>
+              <p className="mt-2 text-sm font-medium text-slate-800">{step}</p>
             </div>
           ))}
         </div>
       </Card>
+
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <SectionTitle eyebrow="Interactions" title="页面交互说明" description="常用入口都在这里，新成员可以按功能名称快速查找。" compact />
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {interactionItems.map(([title, text]) => (
+            <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <h3 className="font-semibold text-slate-950">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="border-blue-100 bg-blue-50/50 p-5 shadow-sm">
+        <SectionTitle eyebrow="Permission note" title="权限说明" description="当前只是帮助说明，不修改 Supabase RLS，不影响当前团队使用。" compact />
+        <div className="mt-5 grid gap-4 xl:grid-cols-2">
+          <GuideBullets title="当前版本" items={["所有登录成员可以查看全部任务", "所有登录成员可以新增、编辑、删除任务", "适合当前小团队快速协作"]} />
+          <GuideBullets title="未来版本" items={["总项目负责人：全部权限", "各负责人：编辑自己负责范围", "BD 人员：编辑自己 owner 的任务", "剪辑人员：编辑剪辑相关任务", "产品研发负责人：编辑产品研发相关任务", "普通成员：只读或有限编辑"]} />
+        </div>
+      </Card>
+
+      <PermissionPlanning />
     </section>
+  );
+}
+
+function GuideBullets({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <h3 className="font-semibold text-slate-950">{title}</h3>
+      <div className="mt-3 space-y-2">
+        {items.map((item) => (
+          <div key={item} className="flex gap-2 text-sm leading-6 text-slate-600">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+            <span>{item}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
