@@ -25,7 +25,6 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
@@ -37,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { platforms, roles, type FiltersState, type Platform, type Task, type TaskInput } from "@/types/task";
 import { Filters, defaultFilters } from "./tasks/Filters";
 import { GroupedTaskSection } from "./tasks/GroupedTaskSection";
+import { OperationsCharts } from "./tasks/OperationsCharts";
 import { ProgressBar } from "./tasks/ProgressBar";
 import { QuickUpdateModal, type QuickUpdateInput } from "./tasks/QuickUpdateModal";
 import { TaskDetailDrawer } from "./tasks/TaskDetailDrawer";
@@ -283,7 +283,6 @@ export function Dashboard({ session }: { session: Session }) {
   const showToday = activeNav === "overview" || activeNav === "today";
   const showPlatformBoard = activeNav === "overview" || isPlatformView;
   const showOwnerWorkload = activeNav === "overview" || activeNav === "owners";
-  const showVisualInsights = activeNav === "overview" || activeNav === "review";
   const platformBoardItems = isPlatformView ? [activeNav] : platforms;
 
   return (
@@ -295,12 +294,15 @@ export function Dashboard({ session }: { session: Session }) {
           <ViewHero view={view} activeNav={activeNav} visibleCount={filteredTasks.length} totalCount={tasks.length} metrics={activeViewMetrics} />
 
           {showOverview ? (
-            <section className="grid gap-4 xl:grid-cols-[1.65fr_1fr]">
-              <div className="space-y-4">
-                <MetricGrid metrics={metrics} />
-              </div>
-              <ProjectHealth metrics={metrics} tasks={tasks} />
-            </section>
+            <>
+              <section className="grid gap-4 xl:grid-cols-[1.65fr_1fr]">
+                <div className="space-y-4">
+                  <MetricGrid metrics={metrics} />
+                </div>
+                <ProjectHealth metrics={metrics} tasks={tasks} />
+              </section>
+              <OperationsCharts tasks={tasks} />
+            </>
           ) : null}
 
           {showToday ? (
@@ -313,13 +315,12 @@ export function Dashboard({ session }: { session: Session }) {
             />
           ) : null}
 
-          {showPlatformBoard || showOwnerWorkload || showVisualInsights ? (
-            <section className="grid gap-5 2xl:grid-cols-[1.35fr_1fr]">
+          {showPlatformBoard || showOwnerWorkload ? (
+            <section className="grid gap-5">
               <div className="space-y-5">
                 {showPlatformBoard ? <PlatformBoard tasks={scopedTasks} platformsToShow={platformBoardItems} onPlatformAdd={openAdd} /> : null}
                 {showOwnerWorkload ? <OwnerWorkload tasks={showOverview ? tasks : filteredTasks} /> : null}
               </div>
-              {showVisualInsights ? <VisualInsights tasks={showOverview ? tasks : filteredTasks} /> : null}
             </section>
           ) : null}
 
@@ -857,46 +858,6 @@ function OwnerWorkload({ tasks }: { tasks: Task[] }) {
   );
 }
 
-function VisualInsights({ tasks }: { tasks: Task[] }) {
-  const maxRisk = Math.max(1, ...[tasks.filter(isOverdue).length, tasks.filter((task) => task.blocker?.trim()).length, tasks.filter((task) => task.priority === "高").length, tasks.filter(isDueThisWeek).length]);
-  return (
-    <section className="space-y-4">
-      <SectionTitle eyebrow="Visual insights" title="可视化窗口" description="用轻量图形快速看出平台、状态、负责人和风险分布。" />
-      <Card className="space-y-5 border-slate-200 p-5 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
-        <ChartBlock title="平台完成率对比">
-          {platforms.map((platform) => {
-            const stats = createPlatformStats(tasks, platform);
-            return <HorizontalBar key={platform} label={platform} value={stats.completionRate} color={platformAccent[platform].bar} suffix="%" />;
-          })}
-        </ChartBlock>
-        <ChartBlock title="任务状态分布">
-          {["未开始", "进行中", "待确认", "已完成", "已暂停"].map((status) => {
-            const count = tasks.filter((task) => task.status === status).length;
-            return <HorizontalBar key={status} label={status} value={tasks.length ? Math.round((count / tasks.length) * 100) : 0} count={count} color={status === "已完成" ? "bg-emerald-500" : status === "进行中" ? "bg-blue-500" : status === "待确认" ? "bg-amber-500" : "bg-slate-400"} suffix="%" />;
-          })}
-        </ChartBlock>
-        <ChartBlock title="负责人完成率对比">
-          {roles.map((role) => {
-            const roleTasks = tasks.filter((task) => task.role === role);
-            const value = roleTasks.length ? Math.round((roleTasks.filter(isCompleted).length / roleTasks.length) * 100) : 0;
-            return <HorizontalBar key={role} label={role === "BD负责人" ? "BD 负责人" : role} value={value} color="bg-blue-600" suffix="%" />;
-          })}
-        </ChartBlock>
-        <ChartBlock title="风险任务分布">
-          {[
-            ["逾期", tasks.filter(isOverdue).length, "bg-red-600"],
-            ["有卡点", tasks.filter((task) => task.blocker?.trim()).length, "bg-orange-500"],
-            ["高优先级", tasks.filter((task) => task.priority === "高").length, "bg-amber-500"],
-            ["本周到期", tasks.filter(isDueThisWeek).length, "bg-blue-500"],
-          ].map(([label, count, color]) => (
-            <HorizontalBar key={String(label)} label={String(label)} value={Math.round((Number(count) / maxRisk) * 100)} count={Number(count)} color={String(color)} />
-          ))}
-        </ChartBlock>
-      </Card>
-    </section>
-  );
-}
-
 function QuickFilters({ active, onChange }: { active: QuickFilter; onChange: (filter: QuickFilter) => void }) {
   const items: Array<{ key: QuickFilter; label: string }> = [
     { key: "today", label: "今日重点" },
@@ -913,27 +874,6 @@ function QuickFilters({ active, onChange }: { active: QuickFilter; onChange: (fi
           {item.label}
         </Button>
       ))}
-    </div>
-  );
-}
-
-function ChartBlock({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h3 className="mb-3 text-sm font-semibold text-slate-950">{title}</h3>
-      <div className="space-y-3">{children}</div>
-    </div>
-  );
-}
-
-function HorizontalBar({ label, value, color, count, suffix = "" }: { label: string; value: number; color: string; count?: number; suffix?: string }) {
-  return (
-    <div className="grid grid-cols-[82px_1fr_48px] items-center gap-3 text-xs">
-      <span className="truncate text-slate-500">{label}</span>
-      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-        <div className={cn("h-full rounded-full", color)} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
-      </div>
-      <span className="text-right font-medium text-slate-700">{count ?? value}{suffix}</span>
     </div>
   );
 }
