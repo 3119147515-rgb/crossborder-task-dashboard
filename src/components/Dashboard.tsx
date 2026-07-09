@@ -624,6 +624,8 @@ function HelpGuide() {
         ))}
       </div>
 
+      <PermissionPlanning />
+
       <Card className="border-slate-200 p-5 shadow-sm">
         <SectionTitle eyebrow="Collaboration rules" title="团队协作规范" description="让每个任务都有明确负责人、当前状态、卡点说明和下一步动作。" compact />
         <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -635,6 +637,53 @@ function HelpGuide() {
         </div>
       </Card>
     </section>
+  );
+}
+
+function PermissionPlanning() {
+  const futureRoles = [
+    { role: "管理员", rules: ["查看全部任务", "新增、编辑、删除全部任务", "管理成员权限"] },
+    { role: "运营负责人", rules: ["查看全部任务", "主要编辑 role = 运营负责人 的任务"] },
+    { role: "项目负责人", rules: ["查看全部任务", "主要编辑 role = 项目负责人 的任务"] },
+    { role: "BD 负责人", rules: ["查看全部任务", "主要编辑 role = BD负责人 的任务"] },
+    { role: "只读成员", rules: ["只能查看任务", "不能新增、编辑、删除"] },
+  ];
+
+  return (
+    <Card className="border-slate-200 p-5 shadow-sm">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <SectionTitle eyebrow="Permission plan" title="权限规划" description="当前只是前端说明，不修改 Supabase RLS、Auth 或任何 policy，不影响当前团队使用。" compact />
+        <Badge className="w-fit bg-slate-100 text-slate-600">规划说明</Badge>
+      </div>
+      <div className="mt-5 grid gap-4 xl:grid-cols-[0.9fr_1.4fr]">
+        <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4">
+          <h3 className="font-semibold text-slate-950">当前版本</h3>
+          <div className="mt-3 space-y-2">
+            {["所有登录用户都可以查看全部任务", "所有登录用户都可以新增、编辑、删除任务", "适合内部小团队测试和早期协作"].map((item) => (
+              <div key={item} className="flex gap-2 text-sm leading-6 text-slate-700">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {futureRoles.map((item) => (
+            <div key={item.role} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <h3 className="font-semibold text-slate-950">{item.role}</h3>
+              <div className="mt-3 space-y-2">
+                {item.rules.map((rule) => (
+                  <div key={rule} className="flex gap-2 text-sm leading-6 text-slate-600">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
+                    <span>{rule}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
   );
 }
 
