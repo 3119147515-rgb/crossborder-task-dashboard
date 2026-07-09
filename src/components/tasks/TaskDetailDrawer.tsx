@@ -48,7 +48,7 @@ export function TaskDetailDrawer({
                 <OverdueBadge task={task} />
               </div>
               <div className="grid gap-3 sm:grid-cols-[1fr_1fr_120px]">
-                <SummaryItem label="负责人角色" value={task.role === "BD负责人" ? "BD 负责人" : task.role} />
+                <SummaryItem label="职能大类" value={task.role} />
                 <SummaryItem label="具体负责人" value={task.owner} />
                 <SummaryItem label="当前进度" value={`${task.progress}%`} strong />
               </div>
@@ -83,7 +83,7 @@ export function TaskDetailDrawer({
           <TaskTimeline task={task} />
 
           <section className="grid gap-3 sm:grid-cols-2">
-            <Info label="负责人" value={`${task.owner} · ${task.role === "BD负责人" ? "BD 负责人" : task.role}`} />
+            <Info label="负责人" value={`${task.owner} · ${task.role}`} />
             <Info label="业务模块" value={<BusinessModuleBadge value={task.business_module} />} />
             <Info label="项目阶段" value={<StageBadge value={task.project_stage} />} />
             <Info label="任务目标" value={task.ecommerce_goal} />

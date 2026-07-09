@@ -91,12 +91,13 @@ git push -u origin main
 ```sql
 create table public.profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  role text not null check (role in ('运营负责人', '项目负责人', 'BD负责人')),
+  role text not null check (role in ('总项目负责人', 'TikTok运营', 'Amazon运营', 'BD', '产品研发', '剪辑', '项目协同')),
   is_admin boolean not null default false
 );
 ```
 
 然后把 `tasks` 的 update/delete policy 改成：管理员可改全部，普通成员只能改与自己 `profiles.role` 一致的任务。`supabase/schema.sql` 底部已预留示例策略写法。
+如果线上 `tasks.role` 仍有旧 check constraint，请先在 Supabase SQL Editor 手动执行 `supabase/migrations/update-team-roles.sql`，只更新约束和现有任务的 role/owner 映射，不会删除任务。
 
 ## 功能范围
 
@@ -106,5 +107,5 @@ create table public.profiles (
 - 快速更新状态、进度、最新进展、卡点、下一步动作
 - 平台/角色/负责人/模块/阶段/状态/优先级/截止时间/搜索筛选
 - 逾期、本周到期、有卡点、高优先级快捷筛选
-- 按平台分组、按负责人角色分组
+- 按平台分组、按具体负责人分组
 - Dashboard、平台统计、平台重点看板

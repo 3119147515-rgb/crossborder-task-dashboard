@@ -37,7 +37,7 @@ import { getSupabase } from "@/lib/supabase";
 import { formatDate, isCompleted, isDueSoon, isDueThisWeek, isOverdue } from "@/lib/date";
 import { getPlatformHealth, getTaskReasonTags, getTodayPriorityTasks } from "@/lib/task-risk";
 import { cn } from "@/lib/utils";
-import { platforms, roles, type FiltersState, type Platform, type Task, type TaskInput } from "@/types/task";
+import { ownerGroups, owners, platforms, type FiltersState, type Platform, type Task, type TaskInput } from "@/types/task";
 import { Filters, defaultFilters } from "./tasks/Filters";
 import { GroupedTaskSection } from "./tasks/GroupedTaskSection";
 import { OperationsCharts } from "./tasks/OperationsCharts";
@@ -50,7 +50,7 @@ import { EmptyState, LoadingState } from "./tasks/states";
 
 type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review" | "help";
 type ExecutionView = "platform" | "role" | "status" | "priority";
-type QuickFilter = "today" | "overdue" | "blocker" | "high" | "week" | "pending" | "ops" | "project" | "bd" | null;
+type QuickFilter = "today" | "overdue" | "blocker" | "high" | "week" | "pending" | "tiktokOps" | "amazonOps" | "bd" | "product" | "editing" | null;
 type NotificationType = "overdue" | "blocker" | "week" | "high";
 type NotificationSummary = Record<NotificationType, number>;
 
@@ -394,7 +394,7 @@ export function Dashboard({ session }: { session: Session }) {
                 <div className="flex flex-wrap gap-2">
                   {[
                     ["platform", "按平台"],
-                    ["role", "按负责人"],
+                    ["role", "按具体负责人"],
                     ["status", "按状态"],
                     ["priority", "按优先级"],
                   ].map(([key, label]) => (
@@ -764,9 +764,9 @@ function HelpGuide() {
     },
     {
       title: "TikTok 运营负责人兼 BD 负责人",
-      focus: ["TikTok 任务", "BD 负责人任务", "达人建联", "样品寄送", "视频回收", "合作报价", "卡点任务"],
+      focus: ["TikTok 任务", "BD 团队任务", "达人建联", "样品寄送", "视频回收", "合作报价", "卡点任务"],
       routine: ["检查 TikTok 内容推进", "检查 BD 人员跟进情况", "检查 10 个 BD 是否按计划建联", "检查样品寄送和达人视频回收", "判断 BD 卡点是否影响内容节奏"],
-      fields: ["BD 任务 role 可选 BD负责人", "TikTok 运营任务 role 可选运营负责人", "owner 写具体负责人姓名", "blocker 写清楚哪位达人、哪个样品、哪个视频卡住"],
+      fields: ["BD 任务 role 选择 BD", "TikTok 运营任务 role 选择 TikTok运营", "owner 写具体负责人姓名", "blocker 写清楚哪位达人、哪个样品、哪个视频卡住"],
     },
     {
       title: "Amazon 运营负责人",
@@ -784,7 +784,7 @@ function HelpGuide() {
       title: "产品研发进度负责人",
       focus: ["产品研发任务", "供应链任务", "打样任务", "包装确认", "产品测试", "SKU / 配件 / 说明书", "影响上线的卡点"],
       routine: ["更新产品打样进度", "更新测试反馈", "更新供应商交付时间", "更新包装、说明书、配件确认进度", "及时标记影响上线的问题"],
-      fields: ["platform 根据影响渠道选择", "role 可先选项目负责人并在 owner 写产品研发负责人", "blocker 写清供应商、样品、测试、包装、认证、交期问题", "next_action 写清下一步确认事项"],
+      fields: ["platform 根据影响渠道选择", "role 选择 产品研发 或 项目协同", "owner 选择 产品研发进度负责人", "blocker 写清供应商、样品、测试、包装、认证、交期问题", "next_action 写清下一步确认事项"],
     },
     {
       title: "剪辑负责人 / 剪辑人员",
@@ -807,7 +807,7 @@ function HelpGuide() {
   ];
   const fieldRows = [
     ["platform", "任务所属渠道", "TikTok / Amazon / 独立站", "运营、BD、Amazon、剪辑"],
-    ["role", "负责人角色", "运营负责人 / 项目负责人 / BD负责人", "所有角色"],
+    ["role", "职能大类", "TikTok运营 / Amazon运营 / BD / 产品研发 / 剪辑 / 项目协同", "所有角色"],
     ["owner", "具体负责人姓名", "BD03 / 张三 / 剪辑负责人", "所有角色"],
     ["task_name", "任务名称", "BD01 跟进达人 Anna 样品地址确认", "所有角色"],
     ["description", "任务背景和要求", "确认达人报价、寄样地址和视频发布时间", "所有角色"],
@@ -1062,10 +1062,10 @@ function PortalFooter() {
 
 function PermissionPlanning() {
   const futureRoles = [
-    { role: "管理员", rules: ["查看全部任务", "新增、编辑、删除全部任务", "管理成员权限"] },
-    { role: "运营负责人", rules: ["查看全部任务", "主要编辑 role = 运营负责人 的任务"] },
-    { role: "项目负责人", rules: ["查看全部任务", "主要编辑 role = 项目负责人 的任务"] },
-    { role: "BD 负责人", rules: ["查看全部任务", "主要编辑 role = BD负责人 的任务"] },
+    { role: "总项目负责人", rules: ["查看全部任务", "新增、编辑、删除全部任务", "管理成员权限"] },
+    { role: "平台运营负责人", rules: ["查看全部任务", "主要编辑 TikTok运营 / Amazon运营 范围任务"] },
+    { role: "BD 团队", rules: ["查看全部任务", "主要编辑 role = BD 或 owner 是自己的任务"] },
+    { role: "产品与内容团队", rules: ["查看全部任务", "主要编辑 产品研发 / 剪辑 范围任务"] },
     { role: "只读成员", rules: ["只能查看任务", "不能新增、编辑、删除"] },
   ];
 
@@ -1437,40 +1437,49 @@ function HealthBadge({ status }: { status: "健康" | "注意" | "风险" }) {
 function OwnerWorkload({ tasks }: { tasks: Task[] }) {
   return (
     <section className="space-y-4">
-      <SectionTitle eyebrow="Owner workload" title="负责人推进情况" description="按角色观察任务压力、完成率和需要支持的卡点。" />
-      <div className="grid gap-4 xl:grid-cols-3">
-        {roles.map((role) => {
-          const roleTasks = tasks.filter((task) => task.role === role);
-          const unfinished = roleTasks.filter((task) => !isCompleted(task)).length;
-          const blockers = roleTasks.filter((task) => task.blocker?.trim()).length;
-          const completed = roleTasks.filter(isCompleted).length;
-          const inProgress = roleTasks.filter((task) => task.status === "进行中").length;
-          const completionRate = roleTasks.length ? Math.round((completed / roleTasks.length) * 100) : 0;
-          const pressure = unfinished > 10 ? "高压力" : blockers > 3 ? "需支持" : "正常";
-          return (
-            <Card key={role} className="border-slate-200 p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-slate-100 p-2 text-slate-700"><UserRound className="h-4 w-4" /></div>
-                  <div>
-                    <h3 className="font-semibold text-slate-950">{role === "BD负责人" ? "BD 负责人" : role}</h3>
-                    <p className="text-xs text-slate-500">任务总数 {roleTasks.length}</p>
-                  </div>
-                </div>
-                <Badge className={cn(pressure === "高压力" && "bg-red-600 text-white", pressure === "需支持" && "bg-amber-500 text-white", pressure === "正常" && "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100")}>{pressure}</Badge>
-              </div>
-              <div className="mt-4"><ProgressBar value={completionRate} tone="bg-blue-600" /></div>
-              <div className="mt-4 grid grid-cols-4 gap-2 text-center">
-                <MiniStat label="进行中" value={inProgress} />
-                <MiniStat label="已完成" value={completed} />
-                <MiniStat label="卡点" value={blockers} danger={blockers > 0} />
-                <MiniStat label="完成率" value={`${completionRate}%`} />
-              </div>
-            </Card>
-          );
-        })}
+      <SectionTitle eyebrow="Owner workload" title="负责人推进情况" description="按真实团队成员观察任务压力、完成率、卡点和逾期情况。" />
+      <div className="space-y-5">
+        {ownerGroups.map((group) => (
+          <div key={group.title} className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-500">{group.title}</h3>
+            <div className="grid gap-4 xl:grid-cols-3">
+              {group.owners.map((owner) => <OwnerCard key={owner} owner={owner} tasks={tasks.filter((task) => task.owner === owner)} />)}
+            </div>
+          </div>
+        ))}
       </div>
     </section>
+  );
+}
+
+function OwnerCard({ owner, tasks }: { owner: string; tasks: Task[] }) {
+  const blockers = tasks.filter((task) => task.blocker?.trim()).length;
+  const completed = tasks.filter(isCompleted).length;
+  const inProgress = tasks.filter((task) => task.status === "进行中").length;
+  const overdue = tasks.filter(isOverdue).length;
+  const completionRate = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
+  const pressure = overdue > 0 || blockers > 2 ? "需支持" : tasks.filter((task) => !isCompleted(task)).length > 8 ? "高压力" : "正常";
+  return (
+    <Card className="border-slate-200 p-4 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="rounded-lg bg-slate-100 p-2 text-slate-700"><UserRound className="h-4 w-4" /></div>
+          <div className="min-w-0">
+            <h3 className="truncate font-semibold text-slate-950">{owner}</h3>
+            <p className="text-xs text-slate-500">任务总数 {tasks.length}</p>
+          </div>
+        </div>
+        <Badge className={cn(pressure === "高压力" && "bg-red-600 text-white", pressure === "需支持" && "bg-amber-500 text-white", pressure === "正常" && "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100")}>{pressure}</Badge>
+      </div>
+      <div className="mt-4"><ProgressBar value={completionRate} tone="bg-blue-600" /></div>
+      <div className="mt-4 grid grid-cols-5 gap-2 text-center">
+        <MiniStat label="进行中" value={inProgress} />
+        <MiniStat label="已完成" value={completed} />
+        <MiniStat label="卡点" value={blockers} danger={blockers > 0} />
+        <MiniStat label="逾期" value={overdue} danger={overdue > 0} />
+        <MiniStat label="完成率" value={`${completionRate}%`} />
+      </div>
+    </Card>
   );
 }
 
@@ -1502,9 +1511,11 @@ function ExecutionSearchToolbar({
     { key: "high", label: "高优先级", count: scopedTasks.filter((task) => matchesQuickFilter(task, "high")).length },
     { key: "week", label: "本周到期", count: scopedTasks.filter((task) => matchesQuickFilter(task, "week")).length },
     { key: "pending", label: "待确认", count: scopedTasks.filter((task) => matchesQuickFilter(task, "pending")).length },
-    { key: "ops", label: "运营负责人", count: scopedTasks.filter((task) => matchesQuickFilter(task, "ops")).length },
-    { key: "project", label: "项目负责人", count: scopedTasks.filter((task) => matchesQuickFilter(task, "project")).length },
-    { key: "bd", label: "BD负责人", count: scopedTasks.filter((task) => matchesQuickFilter(task, "bd")).length },
+    { key: "tiktokOps", label: "TikTok运营", count: scopedTasks.filter((task) => matchesQuickFilter(task, "tiktokOps")).length },
+    { key: "amazonOps", label: "Amazon运营", count: scopedTasks.filter((task) => matchesQuickFilter(task, "amazonOps")).length },
+    { key: "bd", label: "BD团队", count: scopedTasks.filter((task) => matchesQuickFilter(task, "bd")).length },
+    { key: "product", label: "产品研发", count: scopedTasks.filter((task) => matchesQuickFilter(task, "product")).length },
+    { key: "editing", label: "剪辑", count: scopedTasks.filter((task) => matchesQuickFilter(task, "editing")).length },
   ];
   const hasAnyFilter = Boolean(active !== null || filters.search.trim() || filters.platform !== "全部" || filters.role !== "全部" || filters.owner || filters.businessModule !== "全部" || filters.stage !== "全部" || filters.status !== "全部" || filters.priority !== "全部" || filters.due !== "全部");
 
@@ -1622,14 +1633,17 @@ function getGroupItems(view: ExecutionView, tasks: Task[]) {
     const presentPlatforms = platforms.filter((platform) => tasks.some((task) => task.platform === platform));
     return presentPlatforms.length ? presentPlatforms : [...platforms];
   }
-  if (view === "role") return [...roles];
+  if (view === "role") {
+    const historicalOwners = Array.from(new Set(tasks.map((task) => task.owner).filter((owner) => owner && !owners.includes(owner as never))));
+    return [...owners, ...historicalOwners];
+  }
   const values = Array.from(new Set(tasks.map((task) => view === "status" ? task.status : task.priority)));
   return values.length ? values : view === "status" ? ["未开始", "进行中", "待确认", "已完成", "已暂停"] : ["高", "中", "低"];
 }
 
 function belongsToGroup(task: Task, view: ExecutionView, group: string) {
   if (view === "platform") return task.platform === group;
-  if (view === "role") return task.role === group;
+  if (view === "role") return task.owner === group;
   if (view === "status") return task.status === group;
   return task.priority === group;
 }
@@ -1665,9 +1679,11 @@ function matchesQuickFilter(task: Task, filter: QuickFilter) {
   if (filter === "high") return task.priority === "高";
   if (filter === "week") return isDueThisWeek(task);
   if (filter === "pending") return task.status === "待确认";
-  if (filter === "ops") return task.role === "运营负责人";
-  if (filter === "project") return task.role === "项目负责人";
-  if (filter === "bd") return task.role === "BD负责人";
+  if (filter === "tiktokOps") return task.role === "TikTok运营";
+  if (filter === "amazonOps") return task.role === "Amazon运营";
+  if (filter === "bd") return task.role === "BD";
+  if (filter === "product") return task.role === "产品研发";
+  if (filter === "editing") return task.role === "剪辑";
   return true;
 }
 

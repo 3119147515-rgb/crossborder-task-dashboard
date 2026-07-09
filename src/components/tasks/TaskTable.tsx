@@ -67,7 +67,7 @@ export function TaskTable({
               </td>
               <td className="w-[130px] min-w-[130px] border-b border-slate-100 px-3 py-3">
                 <div className="truncate font-medium text-slate-900">{task.owner}</div>
-                <div className="whitespace-nowrap text-xs text-slate-500">{task.role === "BD负责人" ? "BD 负责人" : task.role}</div>
+                <div className="whitespace-nowrap text-xs text-slate-500">{task.role}</div>
               </td>
               <td className="w-[150px] min-w-[150px] space-y-1 border-b border-slate-100 px-3 py-3">
                 <BusinessModuleBadge value={task.business_module} />

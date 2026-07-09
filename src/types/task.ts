@@ -1,5 +1,41 @@
 export const platforms = ["TikTok", "Amazon", "独立站"] as const;
-export const roles = ["运营负责人", "项目负责人", "BD负责人"] as const;
+export const roles = ["总项目负责人", "TikTok运营", "Amazon运营", "BD", "产品研发", "剪辑", "项目协同"] as const;
+export const legacyRoles = ["运营负责人", "项目负责人", "BD负责人"] as const;
+export const owners = [
+  "总项目负责人",
+  "TikTok运营负责人",
+  "TikTok运营负责人兼BD负责人",
+  "Amazon运营负责人",
+  "TikTok运营助理",
+  "BD01",
+  "BD02",
+  "BD03",
+  "BD04",
+  "BD05",
+  "BD06",
+  "BD07",
+  "BD08",
+  "BD09",
+  "BD10",
+  "产品研发进度负责人",
+  "剪辑负责人",
+  "剪辑人员",
+] as const;
+export const ownerGroups = [
+  { title: "管理层", owners: ["总项目负责人"] },
+  { title: "平台运营", owners: ["TikTok运营负责人", "TikTok运营负责人兼BD负责人", "Amazon运营负责人", "TikTok运营助理"] },
+  { title: "BD团队", owners: ["BD01", "BD02", "BD03", "BD04", "BD05", "BD06", "BD07", "BD08", "BD09", "BD10"] },
+  { title: "产品与内容", owners: ["产品研发进度负责人", "剪辑负责人", "剪辑人员"] },
+] as const;
+export const ownersByRole: Record<(typeof roles)[number], readonly (typeof owners)[number][]> = {
+  总项目负责人: ["总项目负责人"],
+  TikTok运营: ["TikTok运营负责人", "TikTok运营负责人兼BD负责人", "TikTok运营助理"],
+  Amazon运营: ["Amazon运营负责人"],
+  BD: ["TikTok运营负责人兼BD负责人", "BD01", "BD02", "BD03", "BD04", "BD05", "BD06", "BD07", "BD08", "BD09", "BD10"],
+  产品研发: ["产品研发进度负责人"],
+  剪辑: ["剪辑负责人", "剪辑人员"],
+  项目协同: ["总项目负责人", "TikTok运营负责人", "Amazon运营负责人", "产品研发进度负责人", "剪辑负责人"],
+};
 export const priorities = ["高", "中", "低"] as const;
 export const statuses = ["未开始", "进行中", "待确认", "已完成", "已暂停"] as const;
 export const stages = [
@@ -94,6 +130,7 @@ export const businessModulesByPlatform = {
 
 export type Platform = (typeof platforms)[number];
 export type Role = (typeof roles)[number];
+export type Owner = (typeof owners)[number];
 export type Priority = (typeof priorities)[number];
 export type TaskStatus = (typeof statuses)[number];
 export type ProjectStage = (typeof stages)[number];

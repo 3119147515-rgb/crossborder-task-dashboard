@@ -1,7 +1,7 @@
 import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
-import { businessModulesByPlatform, platforms, priorities, roles, stages, statuses, type FiltersState, type Task } from "@/types/task";
+import { businessModulesByPlatform, owners, platforms, priorities, roles, stages, statuses, type FiltersState, type Task } from "@/types/task";
 
 export const defaultFilters: FiltersState = {
   platform: "全部",
@@ -25,7 +25,7 @@ export function Filters({
   setFilters: (filters: FiltersState) => void;
   tasks: Task[];
 }) {
-  const owners = Array.from(new Set(tasks.map((task) => task.owner).filter(Boolean)));
+  const historicalOwners = Array.from(new Set(tasks.map((task) => task.owner).filter((owner) => owner && !owners.includes(owner as never))));
   const moduleOptions =
     filters.platform === "全部"
       ? Object.values(businessModulesByPlatform).flat()
@@ -46,7 +46,7 @@ export function Filters({
           </Select>
         </div>
         <div>
-          <Label>负责人角色</Label>
+          <Label>职能大类</Label>
           <Select value={filters.role} onChange={(event) => patch({ role: event.target.value as FiltersState["role"] })}>
             <option>全部</option>
             {roles.map((item) => <option key={item}>{item}</option>)}
@@ -57,6 +57,11 @@ export function Filters({
           <Select value={filters.owner || "全部"} onChange={(event) => patch({ owner: event.target.value === "全部" ? "" : event.target.value })}>
             <option>全部</option>
             {owners.map((item) => <option key={item}>{item}</option>)}
+            {historicalOwners.length ? (
+              <optgroup label="历史负责人">
+                {historicalOwners.map((item) => <option key={item}>{item}</option>)}
+              </optgroup>
+            ) : null}
           </Select>
         </div>
         <div>

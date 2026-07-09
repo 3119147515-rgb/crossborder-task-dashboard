@@ -5,13 +5,13 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
-import { businessModulesByPlatform, goals, kpiMetrics, platforms, priorities, roles, stages, statuses, type Platform, type Task, type TaskInput } from "@/types/task";
+import { businessModulesByPlatform, goals, kpiMetrics, owners, ownersByRole, platforms, priorities, roles, stages, statuses, type Platform, type Role, type Task, type TaskInput } from "@/types/task";
 
 function blankTask(platform: Platform = "TikTok"): TaskInput {
   return {
     platform,
-    role: "运营负责人",
-    owner: "",
+    role: "TikTok运营",
+    owner: "TikTok运营负责人",
     task_name: "",
     description: "",
     business_module: businessModulesByPlatform[platform][0],
@@ -53,6 +53,8 @@ export function TaskFormModal({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const modules = useMemo(() => businessModulesByPlatform[form.platform], [form.platform]);
+  const recommendedOwners = useMemo(() => ownersByRole[form.role as Role] || [], [form.role]);
+  const otherOwners = useMemo(() => owners.filter((owner) => !recommendedOwners.includes(owner)), [recommendedOwners]);
 
   useEffect(() => {
     if (!open) return;
@@ -97,6 +99,9 @@ export function TaskFormModal({
     if (next.platform && !(businessModulesByPlatform[next.platform] as readonly string[]).includes(merged.business_module)) {
       merged.business_module = businessModulesByPlatform[next.platform][0];
     }
+    if (next.role && ownersByRole[next.role as Role]?.length && (!form.owner || ownersByRole[form.role as Role]?.includes(form.owner as never))) {
+      merged.owner = ownersByRole[next.role as Role][0];
+    }
     setForm(merged);
   }
 
@@ -140,8 +145,18 @@ export function TaskFormModal({
         </div>
         <div className="grid gap-4 p-6 md:grid-cols-4">
           <Field label="平台"><Select value={form.platform} onChange={(event) => patch({ platform: event.target.value as Platform })}>{platforms.map((item) => <option key={item}>{item}</option>)}</Select></Field>
-          <Field label="负责人角色"><Select value={form.role} onChange={(event) => patch({ role: event.target.value as TaskInput["role"] })}>{roles.map((item) => <option key={item}>{item}</option>)}</Select></Field>
-          <Field label="具体负责人"><Input value={form.owner} onChange={(event) => patch({ owner: event.target.value })} /></Field>
+          <Field label="职能大类"><Select value={form.role} onChange={(event) => patch({ role: event.target.value as TaskInput["role"] })}>{roles.map((item) => <option key={item}>{item}</option>)}</Select></Field>
+          <Field label="具体负责人">
+            <Select value={form.owner} onChange={(event) => patch({ owner: event.target.value })}>
+              {form.owner && !owners.includes(form.owner as never) ? <option value={form.owner}>历史负责人：{form.owner}</option> : null}
+              <optgroup label="推荐负责人">
+                {recommendedOwners.map((item) => <option key={item}>{item}</option>)}
+              </optgroup>
+              <optgroup label="全部团队成员">
+                {otherOwners.map((item) => <option key={item}>{item}</option>)}
+              </optgroup>
+            </Select>
+          </Field>
           <Field label="优先级"><Select value={form.priority} onChange={(event) => patch({ priority: event.target.value as TaskInput["priority"] })}>{priorities.map((item) => <option key={item}>{item}</option>)}</Select></Field>
           <Field className="md:col-span-2" label="任务名称"><Input value={form.task_name} onChange={(event) => patch({ task_name: event.target.value })} /></Field>
           <Field label="业务模块"><Select value={form.business_module} onChange={(event) => patch({ business_module: event.target.value })}>{modules.map((item) => <option key={item}>{item}</option>)}</Select></Field>

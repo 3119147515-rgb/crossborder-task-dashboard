@@ -59,7 +59,7 @@ export function OperationsCharts({ tasks }: { tasks: Task[] }) {
     const roleTasks = tasks.filter((task) => task.role === role);
     const completed = roleTasks.filter(isCompleted).length;
     return {
-      role: role === "BD负责人" ? "BD 负责人" : role,
+      role,
       total: roleTasks.length,
       inProgress: roleTasks.filter((task) => task.status === "进行中").length,
       blockers: roleTasks.filter((task) => task.blocker?.trim()).length,
@@ -127,7 +127,7 @@ export function OperationsCharts({ tasks }: { tasks: Task[] }) {
             </div>
           </ChartCard>
 
-          <ChartCard title="负责人任务负载" description="按角色对比总任务、进行中、卡点和完成率。">
+          <ChartCard title="职能任务负载" description="按职能大类对比总任务、进行中、卡点和完成率。">
             <div className="space-y-3">
               {ownerData.map((item) => (
                 <div key={item.role} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
