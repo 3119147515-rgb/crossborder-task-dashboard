@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   BarChart3,
+  BookOpen,
   BriefcaseBusiness,
   CalendarClock,
   CheckCircle2,
@@ -46,7 +47,7 @@ import { TaskFormModal } from "./tasks/TaskFormModal";
 import { PlatformBadge, RiskBadge, StatusBadge } from "./tasks/badges";
 import { EmptyState, LoadingState } from "./tasks/states";
 
-type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review";
+type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review" | "help";
 type ExecutionView = "platform" | "role" | "status" | "priority";
 type QuickFilter = "today" | "overdue" | "blocker" | "high" | "week" | "pending" | "ops" | "project" | "bd" | null;
 
@@ -60,6 +61,7 @@ const sidebarItems: Array<{ key: NavKey; label: string; icon: typeof LayoutDashb
   { key: "blockers", label: "卡点任务", icon: AlertTriangle },
   { key: "overdue", label: "逾期任务", icon: Clock3 },
   { key: "review", label: "数据复盘", icon: PieChart },
+  { key: "help", label: "使用说明", icon: BookOpen },
 ];
 
 const viewCopy: Record<NavKey, { title: string; eyebrow: string; description: string }> = {
@@ -107,6 +109,11 @@ const viewCopy: Record<NavKey, { title: string; eyebrow: string; description: st
     title: "数据复盘",
     eyebrow: "Review desk",
     description: "聚合数据复盘、内容复盘、效果复盘相关任务，沉淀平台推进结论。",
+  },
+  help: {
+    title: "使用说明",
+    eyebrow: "Help center",
+    description: "团队使用跨境电商多平台运营中台的协作流程、任务规范和常见操作说明。",
   },
 };
 
@@ -284,12 +291,13 @@ export function Dashboard({ session }: { session: Session }) {
   const groupItems = getGroupItems(executionView, filteredTasks);
   const view = viewCopy[activeNav];
   const isPlatformView = isPlatformNav(activeNav);
+  const showHelp = activeNav === "help";
   const scopedTasks = isPlatformView ? tasks.filter((task) => task.platform === activeNav) : filteredTasks;
   const activeViewMetrics = createMetrics(filteredTasks);
-  const showOverview = activeNav === "overview";
-  const showToday = activeNav === "overview" || activeNav === "today";
-  const showPlatformBoard = activeNav === "overview" || isPlatformView;
-  const showOwnerWorkload = activeNav === "overview" || activeNav === "owners";
+  const showOverview = activeNav === "overview" && !showHelp;
+  const showToday = (activeNav === "overview" || activeNav === "today") && !showHelp;
+  const showPlatformBoard = (activeNav === "overview" || isPlatformView) && !showHelp;
+  const showOwnerWorkload = (activeNav === "overview" || activeNav === "owners") && !showHelp;
   const platformBoardItems = isPlatformView ? [activeNav] : platforms;
 
   return (
@@ -299,6 +307,8 @@ export function Dashboard({ session }: { session: Session }) {
         <ExecutiveSidebar activeNav={activeNav} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onSelect={selectNav} />
         <section className="min-w-0 flex-1 space-y-5">
           <ViewHero view={view} activeNav={activeNav} visibleCount={filteredTasks.length} totalCount={tasks.length} metrics={activeViewMetrics} />
+
+          {showHelp ? <HelpGuide /> : null}
 
           {showOverview ? (
             <>
@@ -331,7 +341,7 @@ export function Dashboard({ session }: { session: Session }) {
             </section>
           ) : null}
 
-          <Card className="overflow-hidden border-slate-200 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+          {!showHelp ? <Card className="overflow-hidden border-slate-200 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
             <div className="border-b border-slate-200 bg-white px-4 py-4 lg:px-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
@@ -396,7 +406,7 @@ export function Dashboard({ session }: { session: Session }) {
                 ))}
               </div>
             )}
-          </Card>
+          </Card> : null}
         </section>
       </div>
       <TaskDetailDrawer
@@ -520,6 +530,125 @@ function ViewHero({
           {isRiskView ? <MiniStat label={activeNav === "blockers" ? "卡点数量" : "逾期数量"} value={visibleCount} danger={visibleCount > 0} /> : null}
           {isReviewView ? <MiniStat label="完成率" value={`${metrics.completionRate}%`} /> : null}
         </div>
+      </div>
+    </Card>
+  );
+}
+
+function HelpGuide() {
+  const ownerGuides = [
+    { title: "运营负责人", text: "每天更新平台运营、素材、活动、广告、转化率相关任务。", tone: "blue" },
+    { title: "项目负责人", text: "更新建站、供应链、履约、库存、节点相关任务。", tone: "indigo" },
+    { title: "BD 负责人", text: "更新达人建联、样品寄送、合作回收、联盟营销相关任务。", tone: "amber" },
+  ];
+  const dailySteps = ["查看项目健康度", "查看今日工作台", "处理逾期和卡点任务", "更新任务进展", "标记完成", "每周做数据复盘"];
+  const statusItems = [
+    ["未开始", "任务已进入计划池，尚未正式推进。"],
+    ["进行中", "负责人正在推进，需要持续更新进展。"],
+    ["待确认", "任务产出已完成，等待复核、验收或负责人确认。"],
+    ["已完成", "任务闭环，进度应为 100%。"],
+    ["已暂停", "任务暂时冻结，需要说明暂停原因和恢复条件。"],
+  ];
+  const riskItems = [
+    ["高风险", "已逾期且存在卡点，需要优先处理。"],
+    ["已逾期", "超过计划截止时间但未完成。"],
+    ["即将到期", "未来 3 天内到期，需要检查推进状态。"],
+    ["有卡点", "存在资源、决策、资料或外部合作阻塞。"],
+    ["正常", "暂无明显风险，按计划推进。"],
+  ];
+  const actionCards = [
+    ["如何新增任务", "点击顶部“新增任务”，选择平台、负责人、业务模块、优先级和截止时间，补齐预期结果与 KPI。"],
+    ["如何快速更新任务", "在任务卡片、表格或详情 Drawer 点击“快速更新”，只更新状态、进度、最新进展、卡点和下一步。"],
+    ["如何标记完成", "未完成任务可点击“一键完成”，确认后状态变为已完成，进度更新为 100%。"],
+    ["如何筛选平台", "使用 Sidebar 的 TikTok / Amazon / 独立站，或任务执行区筛选器按平台查看任务。"],
+  ];
+
+  return (
+    <section className="space-y-5">
+      <Card className="border-slate-200 p-5 shadow-[0_12px_34px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-2 text-blue-600">
+              <BookOpen className="h-5 w-5" />
+              <span className="text-xs font-semibold uppercase tracking-[0.18em]">Workflow handbook</span>
+            </div>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-950">跨境电商多平台运营中台使用说明</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              本系统用于 TikTok、Amazon、独立站三个渠道的跨境电商任务推进，帮助运营负责人、项目负责人和 BD 负责人统一查看进度、风险、卡点和下一步动作。
+            </p>
+          </div>
+          <Badge className="w-fit bg-blue-50 text-blue-700 ring-1 ring-blue-100">团队协作指南</Badge>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        {ownerGuides.map((item) => (
+          <Card key={item.title} className="border-slate-200 p-4 shadow-sm">
+            <div className={cn(
+              "mb-4 flex h-10 w-10 items-center justify-center rounded-lg",
+              item.tone === "blue" && "bg-blue-50 text-blue-600",
+              item.tone === "indigo" && "bg-indigo-50 text-indigo-600",
+              item.tone === "amber" && "bg-amber-50 text-amber-600",
+            )}>
+              <Users className="h-5 w-5" />
+            </div>
+            <h3 className="font-semibold text-slate-950">{item.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <SectionTitle eyebrow="Daily routine" title="每天使用流程" description="建议团队每天按固定节奏处理任务，减少信息遗漏和责任不清。" compact />
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {dailySteps.map((step, index) => (
+            <div key={step} className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">{index + 1}</span>
+              <span className="pt-1 text-sm font-medium text-slate-800">{step}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <GuideList title="任务状态说明" items={statusItems} />
+        <GuideList title="风险等级说明" items={riskItems} />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-4">
+        {actionCards.map(([title, text]) => (
+          <Card key={title} className="border-slate-200 p-4 shadow-sm">
+            <h3 className="font-semibold text-slate-950">{title}</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <SectionTitle eyebrow="Collaboration rules" title="团队协作规范" description="让每个任务都有明确负责人、当前状态、卡点说明和下一步动作。" compact />
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {["重要任务必须填写截止时间和预期结果。", "出现 blocker 时及时写清阻塞原因和需要谁支持。", "每周数据复盘任务要沉淀结论，并转化成下一轮优化动作。"].map((item) => (
+            <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+              {item}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+function GuideList({ title, items }: { title: string; items: string[][] }) {
+  return (
+    <Card className="border-slate-200 p-5 shadow-sm">
+      <h3 className="font-semibold text-slate-950">{title}</h3>
+      <div className="mt-4 space-y-3">
+        {items.map(([label, text]) => (
+          <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="font-medium text-slate-900">{label}</div>
+            <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
+          </div>
+        ))}
       </div>
     </Card>
   );
