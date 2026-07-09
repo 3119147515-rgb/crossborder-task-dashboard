@@ -4,8 +4,9 @@ import { CheckCircle2, Circle, Clock3, Edit, RefreshCw, Trash2, X } from "lucide
 import type React from "react";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatDateTime, isCompleted, isDueSoon, isOverdue } from "@/lib/date";
+import { formatMemberName } from "@/lib/team-members";
 import { cn } from "@/lib/utils";
-import type { Task } from "@/types/task";
+import type { Task, TeamMember } from "@/types/task";
 import { BusinessModuleBadge, OverdueBadge, PlatformBadge, PriorityBadge, RiskBadge, StageBadge, StatusBadge } from "./badges";
 import { ProgressBar } from "./ProgressBar";
 
@@ -17,6 +18,7 @@ export function TaskDetailDrawer({
   onQuickEdit,
   onComplete,
   onQuickUpdate,
+  memberMap,
 }: {
   task: Task | null;
   onClose: () => void;
@@ -25,6 +27,7 @@ export function TaskDetailDrawer({
   onQuickEdit: (task: Task) => void;
   onComplete: (task: Task) => void;
   onQuickUpdate: (task: Task, patch: Partial<Task>) => Promise<void>;
+  memberMap: Map<string, TeamMember>;
 }) {
   if (!task) return null;
 
@@ -49,7 +52,7 @@ export function TaskDetailDrawer({
               </div>
               <div className="grid gap-3 sm:grid-cols-[1fr_1fr_120px]">
                 <SummaryItem label="职能大类" value={task.role} />
-                <SummaryItem label="具体负责人" value={task.owner} />
+                <SummaryItem label="具体负责人" value={formatMemberName(task.owner, memberMap)} />
                 <SummaryItem label="当前进度" value={`${task.progress}%`} strong />
               </div>
             </div>
@@ -83,7 +86,7 @@ export function TaskDetailDrawer({
           <TaskTimeline task={task} />
 
           <section className="grid gap-3 sm:grid-cols-2">
-            <Info label="负责人" value={`${task.owner} · ${task.role}`} />
+            <Info label="负责人" value={`${formatMemberName(task.owner, memberMap)} · ${task.role}`} />
             <Info label="业务模块" value={<BusinessModuleBadge value={task.business_module} />} />
             <Info label="项目阶段" value={<StageBadge value={task.project_stage} />} />
             <Info label="任务目标" value={task.ecommerce_goal} />

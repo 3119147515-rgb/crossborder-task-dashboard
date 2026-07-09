@@ -168,6 +168,17 @@ export interface Task {
   result_summary: string | null;
 }
 
+export interface TeamMember {
+  id?: string;
+  member_code: string;
+  display_name: string | null;
+  role_group: Role;
+  email: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export type TaskInput = Omit<Task, "id" | "created_at" | "updated_at" | "completed_at"> & {
   completed_at?: string | null;
 };

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/surface";
 import { isOverdue } from "@/lib/date";
-import type { Platform, Task } from "@/types/task";
+import type { Platform, Task, TeamMember } from "@/types/task";
 import { EmptyState } from "./states";
 import { TaskTable } from "./TaskTable";
 
@@ -19,6 +19,7 @@ export function GroupedTaskSection({
   onQuickEdit,
   onComplete,
   onQuickUpdate,
+  memberMap,
 }: {
   title: string;
   tasks: Task[];
@@ -29,6 +30,7 @@ export function GroupedTaskSection({
   onQuickEdit: (task: Task) => void;
   onComplete: (task: Task) => void;
   onQuickUpdate: (task: Task, patch: Partial<Task>) => Promise<void>;
+  memberMap: Map<string, TeamMember>;
 }) {
   const [open, setOpen] = useState(true);
   const completed = tasks.filter((task) => task.status === "已完成").length;
@@ -56,6 +58,7 @@ export function GroupedTaskSection({
           onQuickEdit={onQuickEdit}
           onComplete={onComplete}
           onQuickUpdate={onQuickUpdate}
+          memberMap={memberMap}
         />
       ) : <div className="p-4"><EmptyState /></div> : null}
     </Card>

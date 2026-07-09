@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/form";
 import { getTaskSaveErrorMessage } from "@/lib/task-errors";
-import { businessModulesByPlatform, goals, kpiMetrics, owners, ownersByRole, platforms, priorities, roles, stages, statuses, type Platform, type Role, type Task, type TaskInput } from "@/types/task";
+import { formatMemberName } from "@/lib/team-members";
+import { businessModulesByPlatform, goals, kpiMetrics, owners, ownersByRole, platforms, priorities, roles, stages, statuses, type Platform, type Role, type Task, type TaskInput, type TeamMember } from "@/types/task";
 
 function blankTask(platform: Platform = "TikTok"): TaskInput {
   return {
@@ -43,12 +44,14 @@ export function TaskFormModal({
   defaultPlatform,
   onClose,
   onSubmit,
+  memberMap,
 }: {
   open: boolean;
   task?: Task | null;
   defaultPlatform?: Platform;
   onClose: () => void;
   onSubmit: (input: TaskInput) => Promise<void>;
+  memberMap: Map<string, TeamMember>;
 }) {
   const [form, setForm] = useState<TaskInput>(blankTask(defaultPlatform));
   const [error, setError] = useState("");
@@ -158,10 +161,10 @@ export function TaskFormModal({
             <Select value={form.owner} onChange={(event) => patch({ owner: event.target.value })}>
               {form.owner && !owners.includes(form.owner as never) ? <option value={form.owner}>历史负责人：{form.owner}</option> : null}
               <optgroup label="推荐负责人">
-                {recommendedOwners.map((item) => <option key={item}>{item}</option>)}
+                {recommendedOwners.map((item) => <option key={item} value={item}>{formatMemberName(item, memberMap)}</option>)}
               </optgroup>
               <optgroup label="全部团队成员">
-                {otherOwners.map((item) => <option key={item}>{item}</option>)}
+                {otherOwners.map((item) => <option key={item} value={item}>{formatMemberName(item, memberMap)}</option>)}
               </optgroup>
             </Select>
           </Field>

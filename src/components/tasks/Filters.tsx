@@ -1,7 +1,8 @@
 import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
-import { businessModulesByPlatform, owners, platforms, priorities, roles, stages, statuses, type FiltersState, type Task } from "@/types/task";
+import { formatMemberName } from "@/lib/team-members";
+import { businessModulesByPlatform, owners, platforms, priorities, roles, stages, statuses, type FiltersState, type Task, type TeamMember } from "@/types/task";
 
 export const defaultFilters: FiltersState = {
   platform: "全部",
@@ -20,10 +21,12 @@ export function Filters({
   filters,
   setFilters,
   tasks,
+  memberMap,
 }: {
   filters: FiltersState;
   setFilters: (filters: FiltersState) => void;
   tasks: Task[];
+  memberMap: Map<string, TeamMember>;
 }) {
   const historicalOwners = Array.from(new Set(tasks.map((task) => task.owner).filter((owner) => owner && !owners.includes(owner as never))));
   const moduleOptions =
@@ -56,10 +59,10 @@ export function Filters({
           <Label>具体负责人</Label>
           <Select value={filters.owner || "全部"} onChange={(event) => patch({ owner: event.target.value === "全部" ? "" : event.target.value })}>
             <option>全部</option>
-            {owners.map((item) => <option key={item}>{item}</option>)}
+            {owners.map((item) => <option key={item} value={item}>{formatMemberName(item, memberMap)}</option>)}
             {historicalOwners.length ? (
               <optgroup label="历史负责人">
-                {historicalOwners.map((item) => <option key={item}>{item}</option>)}
+                {historicalOwners.map((item) => <option key={item} value={item}>{formatMemberName(item, memberMap)}</option>)}
               </optgroup>
             ) : null}
           </Select>

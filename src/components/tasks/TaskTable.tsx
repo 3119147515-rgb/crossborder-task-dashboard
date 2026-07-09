@@ -3,8 +3,9 @@
 import { CheckCircle2, Edit, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatDateTime, isCompleted, isDueSoon, isOverdue } from "@/lib/date";
+import { formatMemberName } from "@/lib/team-members";
 import { cn } from "@/lib/utils";
-import type { Task } from "@/types/task";
+import type { Task, TeamMember } from "@/types/task";
 import { BusinessModuleBadge, OverdueBadge, PlatformBadge, PriorityBadge, RiskBadge, StageBadge, StatusBadge } from "./badges";
 import { ProgressBar } from "./ProgressBar";
 
@@ -16,6 +17,7 @@ export function TaskTable({
   onQuickEdit,
   onComplete,
   onQuickUpdate,
+  memberMap,
 }: {
   tasks: Task[];
   onEdit: (task: Task) => void;
@@ -24,6 +26,7 @@ export function TaskTable({
   onQuickEdit: (task: Task) => void;
   onComplete: (task: Task) => void;
   onQuickUpdate: (task: Task, patch: Partial<Task>) => Promise<void>;
+  memberMap: Map<string, TeamMember>;
 }) {
   const columns = [
     ["平台", "w-[90px] min-w-[90px]"],
@@ -66,7 +69,7 @@ export function TaskTable({
                 <div className="mt-1 line-clamp-2 safe-text text-xs leading-5 text-slate-500">{task.description}</div>
               </td>
               <td className="w-[130px] min-w-[130px] border-b border-slate-100 px-3 py-3">
-                <div className="truncate font-medium text-slate-900">{task.owner}</div>
+                <div className="truncate font-medium text-slate-900">{formatMemberName(task.owner, memberMap)}</div>
                 <div className="whitespace-nowrap text-xs text-slate-500">{task.role}</div>
               </td>
               <td className="w-[150px] min-w-[150px] space-y-1 border-b border-slate-100 px-3 py-3">

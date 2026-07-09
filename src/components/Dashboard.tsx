@@ -36,9 +36,10 @@ import { Card, Badge } from "@/components/ui/surface";
 import { getSupabase } from "@/lib/supabase";
 import { formatDate, isCompleted, isDueSoon, isDueThisWeek, isOverdue } from "@/lib/date";
 import { getTaskSaveErrorMessage } from "@/lib/task-errors";
+import { createMemberMap, defaultTeamMembers, formatMemberName, getMembersByGroup } from "@/lib/team-members";
 import { getPlatformHealth, getTaskReasonTags, getTodayPriorityTasks } from "@/lib/task-risk";
 import { cn } from "@/lib/utils";
-import { ownerGroups, owners, platforms, type FiltersState, type Platform, type Task, type TaskInput } from "@/types/task";
+import { ownerGroups, owners, platforms, type FiltersState, type Platform, type Task, type TaskInput, type TeamMember } from "@/types/task";
 import { Filters, defaultFilters } from "./tasks/Filters";
 import { GroupedTaskSection } from "./tasks/GroupedTaskSection";
 import { OperationsCharts } from "./tasks/OperationsCharts";
@@ -49,7 +50,7 @@ import { TaskFormModal } from "./tasks/TaskFormModal";
 import { PlatformBadge, RiskBadge, StatusBadge } from "./tasks/badges";
 import { EmptyState, LoadingState } from "./tasks/states";
 
-type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review" | "help";
+type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review" | "team" | "help";
 type ExecutionView = "platform" | "role" | "status" | "priority";
 type QuickFilter = "today" | "overdue" | "blocker" | "high" | "week" | "pending" | "tiktokOps" | "amazonOps" | "bd" | "product" | "editing" | null;
 type NotificationType = "overdue" | "blocker" | "week" | "high";
@@ -65,6 +66,7 @@ const sidebarItems: Array<{ key: NavKey; label: string; icon: typeof LayoutDashb
   { key: "blockers", label: "卡点任务", icon: AlertTriangle },
   { key: "overdue", label: "逾期任务", icon: Clock3 },
   { key: "review", label: "数据复盘", icon: PieChart },
+  { key: "team", label: "团队成员", icon: UserRound },
   { key: "help", label: "使用说明", icon: BookOpen },
 ];
 
@@ -73,7 +75,7 @@ const sidebarGroups: Array<{ title: string; items: typeof sidebarItems }> = [
   { title: "平台", items: sidebarItems.filter((item) => item.key === "TikTok" || item.key === "Amazon" || item.key === "独立站") },
   { title: "协作", items: sidebarItems.filter((item) => item.key === "owners" || item.key === "blockers" || item.key === "overdue") },
   { title: "分析", items: sidebarItems.filter((item) => item.key === "review") },
-  { title: "帮助", items: sidebarItems.filter((item) => item.key === "help") },
+  { title: "帮助", items: sidebarItems.filter((item) => item.key === "team" || item.key === "help") },
 ];
 
 const viewCopy: Record<NavKey, { title: string; eyebrow: string; description: string }> = {
@@ -127,6 +129,11 @@ const viewCopy: Record<NavKey, { title: string; eyebrow: string; description: st
     eyebrow: "Help center",
     description: "团队使用跨境电商多平台运营中台的协作流程、任务规范和常见操作说明。",
   },
+  team: {
+    title: "团队成员管理",
+    eyebrow: "Team members",
+    description: "配置 BD01、BD02 等成员编号对应的真实姓名，方便任务分配和团队协作。",
+  },
 };
 
 const platformAccent: Record<Platform, { dot: string; bar: string; soft: string; text: string }> = {
@@ -143,6 +150,8 @@ const platformModules: Record<Platform, string[]> = {
 
 export function Dashboard({ session }: { session: Session }) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(defaultTeamMembers);
+  const [membersReady, setMembersReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FiltersState>(defaultFilters);
   const [executionView, setExecutionView] = useState<ExecutionView>("platform");
@@ -172,9 +181,27 @@ export function Dashboard({ session }: { session: Session }) {
     }
   }
 
+  async function loadTeamMembers() {
+    const { data, error } = await supabase
+      .from("team_members")
+      .select("id, member_code, display_name, role_group, email, is_active, created_at, updated_at")
+      .order("role_group", { ascending: true })
+      .order("member_code", { ascending: true });
+    if (error) {
+      console.error("Load team members failed", error);
+      setTeamMembers(defaultTeamMembers);
+      setMembersReady(false);
+      if (error.code === "42P01") setNotice("团队成员表尚未创建，请执行 create-team-members.sql。");
+      return;
+    }
+    setTeamMembers(mergeTeamMembers((data || []) as TeamMember[]));
+    setMembersReady(true);
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadTasks();
+    loadTeamMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -186,6 +213,7 @@ export function Dashboard({ session }: { session: Session }) {
 
   const metrics = useMemo(() => createMetrics(tasks), [tasks]);
   const notificationSummary = useMemo(() => getNotificationSummary(tasks), [tasks]);
+  const memberMap = useMemo(() => createMemberMap(teamMembers), [teamMembers]);
 
   const filteredTasks = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -248,6 +276,16 @@ export function Dashboard({ session }: { session: Session }) {
     setModalOpen(false);
     await loadTasks();
     setNotice(editingTask ? "任务已保存" : "任务已新增");
+  }
+
+  async function saveTeamMemberProfile(memberCode: string, patch: Pick<TeamMember, "display_name" | "email" | "is_active">) {
+    const { error } = await supabase.from("team_members").update(patch).eq("member_code", memberCode);
+    if (error) {
+      console.error("Save team member failed", error);
+      throw error;
+    }
+    await loadTeamMembers();
+    setNotice("成员资料已保存");
   }
 
   async function quickUpdate(task: Task, patch: Partial<Task>, options: { throwOnError?: boolean } = {}) {
@@ -350,12 +388,13 @@ export function Dashboard({ session }: { session: Session }) {
   const view = viewCopy[activeNav];
   const isPlatformView = isPlatformNav(activeNav);
   const showHelp = activeNav === "help";
+  const showTeam = activeNav === "team";
   const scopedTasks = isPlatformView ? tasks.filter((task) => task.platform === activeNav) : filteredTasks;
   const activeViewMetrics = createMetrics(filteredTasks);
-  const showOverview = activeNav === "overview" && !showHelp;
-  const showToday = (activeNav === "overview" || activeNav === "today") && !showHelp;
-  const showPlatformBoard = (activeNav === "overview" || isPlatformView) && !showHelp;
-  const showOwnerWorkload = (activeNav === "overview" || activeNav === "owners") && !showHelp;
+  const showOverview = activeNav === "overview" && !showHelp && !showTeam;
+  const showToday = (activeNav === "overview" || activeNav === "today") && !showHelp && !showTeam;
+  const showPlatformBoard = (activeNav === "overview" || isPlatformView) && !showHelp && !showTeam;
+  const showOwnerWorkload = (activeNav === "overview" || activeNav === "owners") && !showHelp && !showTeam;
   const platformBoardItems = isPlatformView ? [activeNav] : platforms;
 
   return (
@@ -363,6 +402,10 @@ export function Dashboard({ session }: { session: Session }) {
       <ExecutiveHeader
         session={session}
         notifications={notificationSummary}
+        teamMembers={teamMembers}
+        memberMap={memberMap}
+        membersReady={membersReady}
+        onProfileSave={saveTeamMemberProfile}
         onAdd={() => openAdd()}
         onNotificationSelect={selectNotification}
         onSignOut={() => supabase.auth.signOut()}
@@ -374,6 +417,7 @@ export function Dashboard({ session }: { session: Session }) {
           <ViewHero view={view} activeNav={activeNav} visibleCount={filteredTasks.length} totalCount={tasks.length} metrics={activeViewMetrics} />
 
           {showHelp ? <HelpGuide /> : null}
+          {showTeam ? <TeamMembersPage members={teamMembers} membersReady={membersReady} onSave={saveTeamMemberProfile} /> : null}
 
           {showOverview ? (
             <>
@@ -395,6 +439,7 @@ export function Dashboard({ session }: { session: Session }) {
               onOpen={setSelectedTask}
               onQuickEdit={setQuickEditingTask}
               onComplete={completeTask}
+              memberMap={memberMap}
             />
           ) : null}
 
@@ -402,12 +447,12 @@ export function Dashboard({ session }: { session: Session }) {
             <section className="grid gap-5">
               <div className="space-y-5">
                 {showPlatformBoard ? <PlatformBoard tasks={scopedTasks} platformsToShow={platformBoardItems} onPlatformAdd={openAdd} /> : null}
-                {showOwnerWorkload ? <OwnerWorkload tasks={showOverview ? tasks : filteredTasks} /> : null}
+                {showOwnerWorkload ? <OwnerWorkload tasks={showOverview ? tasks : filteredTasks} memberMap={memberMap} /> : null}
               </div>
             </section>
           ) : null}
 
-          {!showHelp ? <Card className="overflow-hidden border-slate-200 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+          {!showHelp && !showTeam ? <Card className="overflow-hidden border-slate-200 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
             <div className="border-b border-slate-200 bg-white px-4 py-4 lg:px-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
@@ -444,7 +489,7 @@ export function Dashboard({ session }: { session: Session }) {
               />
             </div>
             <div className="border-b border-slate-200 bg-slate-50/80 p-4 lg:p-5">
-              <Filters filters={filters} setFilters={setFilters} tasks={tasks} />
+              <Filters filters={filters} setFilters={setFilters} tasks={tasks} memberMap={memberMap} />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm text-slate-500 lg:px-5">
               <span>当前显示 <strong className="text-slate-900">{filteredTasks.length}</strong> / {tasks.length} 个任务</span>
@@ -459,7 +504,7 @@ export function Dashboard({ session }: { session: Session }) {
                 {groupItems.map((group) => (
                   <GroupedTaskSection
                     key={group}
-                    title={group}
+                    title={executionView === "role" ? formatMemberName(group, memberMap) : group}
                     tasks={filteredTasks.filter((task) => belongsToGroup(task, executionView, group))}
                     onAdd={openAdd}
                     onEdit={openEdit}
@@ -468,6 +513,7 @@ export function Dashboard({ session }: { session: Session }) {
                     onQuickEdit={setQuickEditingTask}
                     onComplete={completeTask}
                     onQuickUpdate={quickUpdate}
+                    memberMap={memberMap}
                   />
                 ))}
               </div>
@@ -484,9 +530,10 @@ export function Dashboard({ session }: { session: Session }) {
         onQuickEdit={setQuickEditingTask}
         onComplete={completeTask}
         onQuickUpdate={quickUpdate}
+        memberMap={memberMap}
       />
       <QuickUpdateModal key={quickEditingTask?.id || "quick-update"} task={quickEditingTask} open={Boolean(quickEditingTask)} onClose={() => setQuickEditingTask(null)} onSubmit={saveQuickUpdate} />
-      <TaskFormModal open={modalOpen} task={editingTask} defaultPlatform={defaultPlatform} onClose={() => setModalOpen(false)} onSubmit={saveTask} />
+      <TaskFormModal open={modalOpen} task={editingTask} defaultPlatform={defaultPlatform} onClose={() => setModalOpen(false)} onSubmit={saveTask} memberMap={memberMap} />
       {notice ? (
         <div className="fixed bottom-5 right-5 z-[70] rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-700 shadow-xl">
           {notice}
@@ -499,19 +546,28 @@ export function Dashboard({ session }: { session: Session }) {
 function ExecutiveHeader({
   session,
   notifications,
+  teamMembers,
+  memberMap,
+  membersReady,
   onAdd,
+  onProfileSave,
   onNotificationSelect,
   onSignOut,
   onMenu,
 }: {
   session: Session;
   notifications: NotificationSummary;
+  teamMembers: TeamMember[];
+  memberMap: Map<string, TeamMember>;
+  membersReady: boolean;
   onAdd: () => void;
+  onProfileSave: (memberCode: string, patch: Pick<TeamMember, "display_name" | "email" | "is_active">) => Promise<void>;
   onNotificationSelect: (type: NotificationType) => void;
   onSignOut: () => void;
   onMenu: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const totalNotifications = notifications.overdue + notifications.blocker + notifications.week + notifications.high;
   const items: Array<{ type: NotificationType; label: string; count: number; tone: string; description: string }> = [
@@ -548,6 +604,7 @@ function ExecutiveHeader({
         <div className="flex shrink-0 items-center gap-2 md:gap-3">
           <span className="hidden max-w-[260px] truncate text-sm text-slate-500 lg:inline">{session.user.email}</span>
           <Button className="bg-blue-600 hover:bg-blue-700" onClick={onAdd}><Plus className="h-4 w-4" /><span className="hidden sm:inline">新增任务</span></Button>
+          <Button variant="outline" onClick={() => setProfileOpen(true)}><UserRound className="h-4 w-4" /><span className="hidden sm:inline">我的资料</span></Button>
           <div className="relative" ref={dropdownRef}>
             <Button
               variant="outline"
@@ -610,7 +667,108 @@ function ExecutiveHeader({
           <Button variant="outline" onClick={onSignOut}><LogOut className="h-4 w-4" /><span className="hidden sm:inline">退出</span></Button>
         </div>
       </div>
+      <ProfileModal
+        open={profileOpen}
+        session={session}
+        teamMembers={teamMembers}
+        memberMap={memberMap}
+        membersReady={membersReady}
+        onClose={() => setProfileOpen(false)}
+        onSave={onProfileSave}
+      />
     </header>
+  );
+}
+
+function ProfileModal({
+  open,
+  session,
+  teamMembers,
+  memberMap,
+  membersReady,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  session: Session;
+  teamMembers: TeamMember[];
+  memberMap: Map<string, TeamMember>;
+  membersReady: boolean;
+  onClose: () => void;
+  onSave: (memberCode: string, patch: Pick<TeamMember, "display_name" | "email" | "is_active">) => Promise<void>;
+}) {
+  const [memberCode, setMemberCode] = useState(teamMembers[0]?.member_code || "BD01");
+  const selected = memberMap.get(memberCode);
+  const [displayName, setDisplayName] = useState(selected?.display_name || "");
+  const [email, setEmail] = useState(selected?.email || session.user.email || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    const first = memberMap.get(memberCode) || teamMembers[0];
+    if (!first) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMemberCode(first.member_code);
+    setDisplayName(first.display_name || "");
+    setEmail(first.email || session.user.email || "");
+    setError("");
+  }, [open, memberCode, memberMap, session.user.email, teamMembers]);
+
+  if (!open) return null;
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(memberCode, { display_name: displayName.trim() || null, email: email.trim() || null, is_active: true });
+      onClose();
+    } catch (err) {
+      console.error("Profile save failed", err);
+      setError("保存失败：请确认已执行 create-team-members.sql，并检查当前账号权限。");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/35 px-4">
+      <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">我的资料</h2>
+            <p className="mt-1 text-sm text-slate-500">当前登录邮箱：{session.user.email}</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+        </div>
+        <div className="space-y-4 px-5 py-5">
+          {!membersReady ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">团队成员表尚未可用，请先执行 create-team-members.sql。</p> : null}
+          <LabelText label="选择成员编号">
+            <select className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400" value={memberCode} onChange={(event) => {
+              const nextCode = event.target.value;
+              const nextMember = memberMap.get(nextCode);
+              setMemberCode(nextCode);
+              setDisplayName(nextMember?.display_name || "");
+              setEmail(nextMember?.email || session.user.email || "");
+            }}>
+              {teamMembers.map((member) => <option key={member.member_code} value={member.member_code}>{formatMemberName(member.member_code, memberMap)}</option>)}
+            </select>
+          </LabelText>
+          <LabelText label="显示名称">
+            <input className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="例如 张三 / Anna / John" />
+          </LabelText>
+          <LabelText label="邮箱">
+            <input className="h-10 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" />
+          </LabelText>
+          <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">当前版本允许用户选择自己的 member_code 并填写显示名称。后续可通过 email 绑定后限制只能修改本人资料。</p>
+          {error ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <Button variant="outline" onClick={onClose} disabled={saving}>取消</Button>
+          <Button onClick={save} disabled={saving || !membersReady} className="bg-blue-600 hover:bg-blue-700">{saving ? "保存中..." : "保存"}</Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -703,6 +861,123 @@ function ViewHero({
         </div>
       </div>
     </Card>
+  );
+}
+
+function TeamMembersPage({
+  members,
+  membersReady,
+  onSave,
+}: {
+  members: TeamMember[];
+  membersReady: boolean;
+  onSave: (memberCode: string, patch: Pick<TeamMember, "display_name" | "email" | "is_active">) => Promise<void>;
+}) {
+  const groups = getMembersByGroup(members);
+  return (
+    <section className="space-y-5">
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <SectionTitle
+              eyebrow="Team settings"
+              title="团队成员管理"
+              description="用于配置 BD01、BD02 等成员编号对应的真实姓名，方便任务分配和团队协作。"
+              compact
+            />
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">任务底层仍保存稳定 member_code。页面显示会优先使用 display_name，例如 张三（BD01）；人员更换时只需要修改显示名称，不需要批量修改历史任务。</p>
+          </div>
+          <Badge className={cn("w-fit", membersReady ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-amber-50 text-amber-700 ring-1 ring-amber-100")}>
+            {membersReady ? "已连接 team_members" : "等待执行 SQL"}
+          </Badge>
+        </div>
+      </Card>
+      {!membersReady ? (
+        <Card className="border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+          当前尚未读取到 Supabase `team_members` 表。请在 Supabase SQL Editor 执行 `supabase/migrations/create-team-members.sql` 后刷新页面。
+        </Card>
+      ) : null}
+      {groups.map((group) => (
+        <section key={group.title} className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-500">{group.title}</h2>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {group.members.map((member) => <TeamMemberCard key={member.member_code} member={member} disabled={!membersReady} onSave={onSave} />)}
+          </div>
+        </section>
+      ))}
+    </section>
+  );
+}
+
+function TeamMemberCard({
+  member,
+  disabled,
+  onSave,
+}: {
+  member: TeamMember;
+  disabled: boolean;
+  onSave: (memberCode: string, patch: Pick<TeamMember, "display_name" | "email" | "is_active">) => Promise<void>;
+}) {
+  const [displayName, setDisplayName] = useState(member.display_name || "");
+  const [email, setEmail] = useState(member.email || "");
+  const [isActive, setIsActive] = useState(member.is_active);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDisplayName(member.display_name || "");
+    setEmail(member.email || "");
+    setIsActive(member.is_active);
+  }, [member]);
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(member.member_code, { display_name: displayName.trim() || null, email: email.trim() || null, is_active: isActive });
+    } catch (err) {
+      console.error("Team member save failed", err);
+      setError("保存失败：请确认 team_members 表和 RLS 策略已创建。");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="border-slate-200 p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-400">member_code</p>
+          <h3 className="mt-1 truncate font-semibold text-slate-950">{member.member_code}</h3>
+          <p className="mt-1 text-xs text-slate-500">{member.role_group}</p>
+        </div>
+        <Badge className={isActive ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-slate-100 text-slate-500"}>{isActive ? "启用" : "停用"}</Badge>
+      </div>
+      <div className="mt-4 space-y-3">
+        <LabelText label="显示名称">
+          <input className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="例如 张三 / Anna" disabled={disabled || saving} />
+        </LabelText>
+        <LabelText label="邮箱">
+          <input className="h-9 w-full rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-blue-400" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" disabled={disabled || saving} />
+        </LabelText>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" className="accent-blue-600" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} disabled={disabled || saving} />
+          是否启用
+        </label>
+        {error ? <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p> : null}
+        <Button size="sm" className="w-full bg-blue-600 hover:bg-blue-700" onClick={save} disabled={disabled || saving}>{saving ? "保存中..." : "保存成员"}</Button>
+      </div>
+    </Card>
+  );
+}
+
+function LabelText({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block text-sm font-medium text-slate-700">
+      {label}
+      <div className="mt-2">{children}</div>
+    </label>
   );
 }
 
@@ -1044,6 +1319,19 @@ function HelpGuide() {
         </div>
       </Card>
 
+      <Card className="border-slate-200 p-5 shadow-sm">
+        <SectionTitle eyebrow="Member names" title="成员名称设置说明" description="成员编号用于稳定分配任务，显示名称用于日常阅读和团队沟通。" compact />
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {[
+            "BD01–BD10 是团队内部稳定编号，不建议直接改编号。",
+            "每个 BD 可以在团队成员页面或我的资料里填写真实姓名。",
+            "系统会在任务中显示真实姓名，但底层仍保留 BD 编号。",
+            "人员更换时只需要修改 display_name，不需要批量修改历史任务。",
+            "建议格式：中文名 / 英文名均可，例如 张三、Anna、John。",
+          ].map((item) => <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">{item}</div>)}
+        </div>
+      </Card>
+
       <Card className="border-blue-100 bg-blue-50/50 p-5 shadow-sm">
         <SectionTitle eyebrow="Permission note" title="权限说明" description="当前只是帮助说明，不修改 Supabase RLS，不影响当前团队使用。" compact />
         <div className="mt-5 grid gap-4 xl:grid-cols-2">
@@ -1250,12 +1538,14 @@ function TodayWorkbench({
   onOpen,
   onQuickEdit,
   onComplete,
+  memberMap,
 }: {
   tasks: Task[];
   onEdit: (task: Task) => void;
   onOpen: (task: Task) => void;
   onQuickEdit: (task: Task) => void;
   onComplete: (task: Task) => void;
+  memberMap: Map<string, TeamMember>;
 }) {
   const priorityTasks = getTodayPriorityTasks(tasks).slice(0, 8);
   return (
@@ -1278,6 +1568,7 @@ function TodayWorkbench({
               onOpen={onOpen}
               onQuickEdit={onQuickEdit}
               onComplete={onComplete}
+              memberMap={memberMap}
             />
           )) : <EmptyMini text="暂无需要处理的任务" />}
         </div>
@@ -1292,12 +1583,14 @@ function CompactTaskItem({
   onOpen,
   onQuickEdit,
   onComplete,
+  memberMap,
 }: {
   task: Task;
   onEdit: (task: Task) => void;
   onOpen: (task: Task) => void;
   onQuickEdit: (task: Task) => void;
   onComplete: (task: Task) => void;
+  memberMap: Map<string, TeamMember>;
 }) {
   const tags = getTaskReasonTags(task);
   return (
@@ -1355,7 +1648,7 @@ function CompactTaskItem({
         </div>
       ) : null}
       <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
-        <span className="truncate">{task.owner} · {task.role}</span>
+        <span className="truncate">{formatMemberName(task.owner, memberMap)} · {task.role}</span>
         <span className={cn(isDueSoon(task) && "font-medium text-amber-600", isOverdue(task) && "font-medium text-red-600")}>{formatDate(task.due_date)}</span>
       </div>
     </button>
@@ -1456,7 +1749,7 @@ function HealthBadge({ status }: { status: "健康" | "注意" | "风险" }) {
   );
 }
 
-function OwnerWorkload({ tasks }: { tasks: Task[] }) {
+function OwnerWorkload({ tasks, memberMap }: { tasks: Task[]; memberMap: Map<string, TeamMember> }) {
   return (
     <section className="space-y-4">
       <SectionTitle eyebrow="Owner workload" title="负责人推进情况" description="按真实团队成员观察任务压力、完成率、卡点和逾期情况。" />
@@ -1465,7 +1758,7 @@ function OwnerWorkload({ tasks }: { tasks: Task[] }) {
           <div key={group.title} className="space-y-3">
             <h3 className="text-sm font-semibold text-slate-500">{group.title}</h3>
             <div className="grid gap-4 xl:grid-cols-3">
-              {group.owners.map((owner) => <OwnerCard key={owner} owner={owner} tasks={tasks.filter((task) => task.owner === owner)} />)}
+              {group.owners.map((owner) => <OwnerCard key={owner} owner={owner} tasks={tasks.filter((task) => task.owner === owner)} memberMap={memberMap} />)}
             </div>
           </div>
         ))}
@@ -1474,7 +1767,7 @@ function OwnerWorkload({ tasks }: { tasks: Task[] }) {
   );
 }
 
-function OwnerCard({ owner, tasks }: { owner: string; tasks: Task[] }) {
+function OwnerCard({ owner, tasks, memberMap }: { owner: string; tasks: Task[]; memberMap: Map<string, TeamMember> }) {
   const blockers = tasks.filter((task) => task.blocker?.trim()).length;
   const completed = tasks.filter(isCompleted).length;
   const inProgress = tasks.filter((task) => task.status === "进行中").length;
@@ -1487,7 +1780,7 @@ function OwnerCard({ owner, tasks }: { owner: string; tasks: Task[] }) {
         <div className="flex min-w-0 items-center gap-3">
           <div className="rounded-lg bg-slate-100 p-2 text-slate-700"><UserRound className="h-4 w-4" /></div>
           <div className="min-w-0">
-            <h3 className="truncate font-semibold text-slate-950">{owner}</h3>
+            <h3 className="truncate font-semibold text-slate-950">{formatMemberName(owner, memberMap)}</h3>
             <p className="text-xs text-slate-500">任务总数 {tasks.length}</p>
           </div>
         </div>
@@ -1629,6 +1922,13 @@ function getNotificationSummary(tasks: Task[]): NotificationSummary {
     week: tasks.filter(isDueThisWeek).length,
     high: tasks.filter((task) => task.priority === "高").length,
   };
+}
+
+function mergeTeamMembers(remoteMembers: TeamMember[]) {
+  const remoteMap = new Map(remoteMembers.map((member) => [member.member_code, member]));
+  const merged = defaultTeamMembers.map((member) => remoteMap.get(member.member_code) || member);
+  const extraMembers = remoteMembers.filter((member) => !owners.includes(member.member_code as never));
+  return [...merged, ...extraMembers];
 }
 
 function createPlatformStats(tasks: Task[], platform: Platform) {
