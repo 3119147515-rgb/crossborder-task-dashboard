@@ -29,7 +29,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card, Badge } from "@/components/ui/surface";
@@ -51,6 +51,8 @@ import { EmptyState, LoadingState } from "./tasks/states";
 type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review" | "help";
 type ExecutionView = "platform" | "role" | "status" | "priority";
 type QuickFilter = "today" | "overdue" | "blocker" | "high" | "week" | "pending" | "ops" | "project" | "bd" | null;
+type NotificationType = "overdue" | "blocker" | "week" | "high";
+type NotificationSummary = Record<NotificationType, number>;
 
 const sidebarItems: Array<{ key: NavKey; label: string; icon: typeof LayoutDashboard }> = [
   { key: "overview", label: "运营总览", icon: LayoutDashboard },
@@ -175,6 +177,7 @@ export function Dashboard({ session }: { session: Session }) {
   }, [notice]);
 
   const metrics = useMemo(() => createMetrics(tasks), [tasks]);
+  const notificationSummary = useMemo(() => getNotificationSummary(tasks), [tasks]);
 
   const filteredTasks = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -297,6 +300,30 @@ export function Dashboard({ session }: { session: Session }) {
     setQuickFilter(null);
   }
 
+  function selectNotification(type: NotificationType) {
+    if (type === "overdue") {
+      selectNav("overdue");
+      return;
+    }
+    if (type === "blocker") {
+      selectNav("blockers");
+      return;
+    }
+    if (type === "week") {
+      setActiveNav("today");
+      setSidebarOpen(false);
+      setFilters(defaultFilters);
+      setQuickFilter("week");
+      setExecutionView("platform");
+      return;
+    }
+    setActiveNav("overview");
+    setSidebarOpen(false);
+    setFilters(defaultFilters);
+    setQuickFilter("high");
+    setExecutionView("platform");
+  }
+
   const groupItems = getGroupItems(executionView, filteredTasks);
   const view = viewCopy[activeNav];
   const isPlatformView = isPlatformNav(activeNav);
@@ -311,7 +338,14 @@ export function Dashboard({ session }: { session: Session }) {
 
   return (
     <main className="min-h-screen bg-[#F6F8FB] text-[#111827]">
-      <ExecutiveHeader session={session} onAdd={() => openAdd()} onSignOut={() => supabase.auth.signOut()} onMenu={() => setSidebarOpen(true)} />
+      <ExecutiveHeader
+        session={session}
+        notifications={notificationSummary}
+        onAdd={() => openAdd()}
+        onNotificationSelect={selectNotification}
+        onSignOut={() => supabase.auth.signOut()}
+        onMenu={() => setSidebarOpen(true)}
+      />
       <div className="mx-auto flex max-w-[1720px] gap-5 px-4 py-5 lg:px-6">
         <ExecutiveSidebar activeNav={activeNav} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onSelect={selectNav} />
         <section className="min-w-0 flex-1 space-y-5">
@@ -440,7 +474,42 @@ export function Dashboard({ session }: { session: Session }) {
   );
 }
 
-function ExecutiveHeader({ session, onAdd, onSignOut, onMenu }: { session: Session; onAdd: () => void; onSignOut: () => void; onMenu: () => void }) {
+function ExecutiveHeader({
+  session,
+  notifications,
+  onAdd,
+  onNotificationSelect,
+  onSignOut,
+  onMenu,
+}: {
+  session: Session;
+  notifications: NotificationSummary;
+  onAdd: () => void;
+  onNotificationSelect: (type: NotificationType) => void;
+  onSignOut: () => void;
+  onMenu: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const totalNotifications = notifications.overdue + notifications.blocker + notifications.week + notifications.high;
+  const items: Array<{ type: NotificationType; label: string; count: number; tone: string; description: string }> = [
+    { type: "overdue", label: "逾期", count: notifications.overdue, tone: "bg-red-50 text-red-700", description: "查看逾期未完成任务" },
+    { type: "blocker", label: "卡点", count: notifications.blocker, tone: "bg-orange-50 text-orange-700", description: "查看存在 blocker 的任务" },
+    { type: "week", label: "到期", count: notifications.week, tone: "bg-amber-50 text-amber-700", description: "查看本周到期任务" },
+    { type: "high", label: "高优先级", count: notifications.high, tone: "bg-blue-50 text-blue-700", description: "查看高优先级任务" },
+  ];
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOnOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeOnOutside);
+    return () => document.removeEventListener("mousedown", closeOnOutside);
+  }, [open]);
+
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-[0_1px_0_rgba(15,23,42,0.02)] backdrop-blur">
       <div className="mx-auto flex max-w-[1720px] items-center justify-between gap-4 px-4 py-3 lg:px-6">
@@ -456,10 +525,66 @@ function ExecutiveHeader({ session, onAdd, onSignOut, onMenu }: { session: Sessi
         </div>
         <div className="flex shrink-0 items-center gap-2 md:gap-3">
           <span className="hidden max-w-[260px] truncate text-sm text-slate-500 lg:inline">{session.user.email}</span>
-          <Button className="bg-blue-600 hover:bg-blue-700" onClick={onAdd}><Plus className="h-4 w-4" />新增任务</Button>
-          <Button variant="outline" size="icon" title="通知提醒占位" aria-label="通知提醒占位">
-            <Bell className="h-4 w-4 text-slate-600" />
-          </Button>
+          <Button className="bg-blue-600 hover:bg-blue-700" onClick={onAdd}><Plus className="h-4 w-4" /><span className="hidden sm:inline">新增任务</span></Button>
+          <div className="relative" ref={dropdownRef}>
+            <Button
+              variant="outline"
+              size="icon"
+              title="通知提醒"
+              aria-label="通知提醒"
+              aria-expanded={open}
+              className="relative"
+              onClick={() => setOpen((current) => !current)}
+            >
+              <Bell className="h-4 w-4 text-slate-600" />
+              {totalNotifications > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-none text-white">
+                  {totalNotifications > 99 ? "99+" : totalNotifications}
+                </span>
+              ) : null}
+            </Button>
+            {open ? (
+              <div className="absolute right-0 top-12 z-50 w-[min(calc(100vw-2rem),360px)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+                <div className="border-b border-slate-100 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-950">通知中心</h3>
+                      <p className="mt-0.5 text-xs text-slate-500">根据当前任务实时计算，不连接推送服务。</p>
+                    </div>
+                    <Badge className={cn(totalNotifications > 0 ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-500")}>
+                      {totalNotifications} 条
+                    </Badge>
+                  </div>
+                </div>
+                {totalNotifications === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-slate-500">暂无重要提醒</div>
+                ) : (
+                  <div className="max-h-[min(60vh,360px)] overflow-y-auto p-2">
+                    {items.map((item) => (
+                      <button
+                        key={item.type}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-3 text-left transition hover:bg-slate-50"
+                        onClick={() => {
+                          onNotificationSelect(item.type);
+                          setOpen(false);
+                        }}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={cn("rounded-md px-2 py-1 text-xs font-medium", item.tone)}>{item.label}</span>
+                            <span className="text-sm font-semibold text-slate-900">{item.count} 个任务</span>
+                          </div>
+                          <p className="mt-1 truncate text-xs text-slate-500">{item.description}</p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
           <Button variant="outline" onClick={onSignOut}><LogOut className="h-4 w-4" /><span className="hidden sm:inline">退出</span></Button>
         </div>
       </div>
@@ -472,7 +597,7 @@ function ExecutiveSidebar({ activeNav, open, onClose, onSelect }: { activeNav: N
     <>
       <div className={cn("fixed inset-0 z-40 bg-slate-950/30 lg:hidden", open ? "block" : "hidden")} onClick={onClose} />
       <aside className={cn(
-        "fixed left-0 top-0 z-50 h-full w-[260px] border-r border-slate-200 bg-white p-4 shadow-xl transition-transform lg:sticky lg:top-[73px] lg:z-20 lg:h-[calc(100vh-96px)] lg:translate-x-0 lg:rounded-xl lg:border lg:shadow-sm",
+        "fixed left-0 top-0 z-50 flex h-[100dvh] w-[260px] flex-col overflow-hidden border-r border-slate-200 bg-white p-4 shadow-xl transition-transform lg:sticky lg:top-[73px] lg:z-20 lg:h-[calc(100vh-73px)] lg:translate-x-0 lg:rounded-xl lg:border lg:shadow-sm",
         open ? "translate-x-0" : "-translate-x-full",
       )}>
         <div className="mb-4 flex items-center justify-between lg:hidden">
@@ -484,7 +609,7 @@ function ExecutiveSidebar({ activeNav, open, onClose, onSelect }: { activeNav: N
           <div className="mt-2 text-sm font-semibold text-slate-950">每日推进视图</div>
           <p className="mt-1 text-xs leading-5 text-slate-500">按平台、风险和负责人快速切换工作重点。</p>
         </div>
-        <nav className="space-y-4">
+        <nav className="-mx-2 min-h-0 flex-1 space-y-4 overflow-y-auto px-2 pb-6 pr-1 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin]">
           {sidebarGroups.map((group) => (
             <div key={group.title}>
               <div className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{group.title}</div>
@@ -1246,6 +1371,15 @@ function createMetrics(tasks: Task[]) {
     highPriority: tasks.filter((task) => task.priority === "高").length,
     dueThisWeek: tasks.filter(isDueThisWeek).length,
     completionRate: tasks.length ? Math.round((completed / tasks.length) * 100) : 0,
+  };
+}
+
+function getNotificationSummary(tasks: Task[]): NotificationSummary {
+  return {
+    overdue: tasks.filter(isOverdue).length,
+    blocker: tasks.filter((task) => Boolean(task.blocker?.trim())).length,
+    week: tasks.filter(isDueThisWeek).length,
+    high: tasks.filter((task) => task.priority === "高").length,
   };
 }
 
