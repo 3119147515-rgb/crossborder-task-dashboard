@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Edit, RefreshCw, Trash2, X } from "lucide-react";
+import { CheckCircle2, Circle, Clock3, Edit, RefreshCw, Trash2, X } from "lucide-react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatDateTime, isCompleted, isDueSoon, isOverdue } from "@/lib/date";
@@ -32,20 +32,28 @@ export function TaskDetailDrawer({
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-slate-950/30" onClick={onClose} />
       <aside className="absolute inset-y-0 right-0 flex w-full max-w-2xl flex-col bg-white shadow-2xl sm:w-[620px]">
-        <div className="border-b border-slate-200 px-5 py-4">
+        <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4">
           <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="mb-3 flex flex-wrap gap-2">
+            <div className="min-w-0 space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Task profile</p>
+                <h2 className="mt-1 text-xl font-semibold leading-7 text-slate-950">{task.task_name}</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">{task.description || "暂无任务说明"}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 <PlatformBadge value={task.platform} />
                 <StatusBadge value={task.status} />
                 <PriorityBadge value={task.priority} />
                 <RiskBadge task={task} />
                 <OverdueBadge task={task} />
               </div>
-              <h2 className="text-xl font-semibold leading-7 text-slate-950">{task.task_name}</h2>
-              <p className="mt-2 text-sm text-slate-500">{task.description || "暂无任务说明"}</p>
+              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_120px]">
+                <SummaryItem label="负责人角色" value={task.role === "BD负责人" ? "BD 负责人" : task.role} />
+                <SummaryItem label="具体负责人" value={task.owner} />
+                <SummaryItem label="当前进度" value={`${task.progress}%`} strong />
+              </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label="关闭详情"><X className="h-5 w-5" /></Button>
+            <Button variant="ghost" size="icon" className="shrink-0" onClick={onClose} aria-label="关闭详情"><X className="h-5 w-5" /></Button>
           </div>
         </div>
 
@@ -71,6 +79,8 @@ export function TaskDetailDrawer({
               />
             </div>
           </section>
+
+          <TaskTimeline task={task} />
 
           <section className="grid gap-3 sm:grid-cols-2">
             <Info label="负责人" value={`${task.owner} · ${task.role === "BD负责人" ? "BD 负责人" : task.role}`} />
@@ -110,6 +120,74 @@ export function TaskDetailDrawer({
       </aside>
     </div>
   );
+}
+
+function SummaryItem({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+      <div className="text-[11px] text-slate-400">{label}</div>
+      <div className={cn("mt-1 truncate text-sm text-slate-700", strong && "text-lg font-semibold text-blue-700")}>{value}</div>
+    </div>
+  );
+}
+
+function TaskTimeline({ task }: { task: Task }) {
+  const items = [
+    { label: "任务创建", value: task.created_at, type: "created" },
+    { label: "开始执行", value: task.start_date, type: "start" },
+    { label: "计划截止", value: task.due_date, type: "due" },
+    { label: "实际完成", value: task.completed_at, type: "completed", optional: true },
+    { label: "最后更新", value: task.updated_at, type: "updated" },
+  ].filter((item) => !item.optional || item.value);
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">Timeline</p>
+          <h3 className="mt-1 font-semibold text-slate-950">任务时间线</h3>
+        </div>
+        <Clock3 className="h-5 w-5 text-slate-400" />
+      </div>
+      <div className="mt-4 space-y-0">
+        {items.map((item, index) => {
+          const tone = getTimelineTone(task, item.type);
+          const last = index === items.length - 1;
+          return (
+            <div key={item.label} className="grid grid-cols-[24px_1fr] gap-3">
+              <div className="flex flex-col items-center">
+                <span className={cn("mt-1 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-white", tone.dot)}>
+                  {tone.done ? <CheckCircle2 className="h-3.5 w-3.5 text-white" /> : <Circle className="h-2.5 w-2.5 text-white" />}
+                </span>
+                {!last ? <span className="mt-1 h-full min-h-8 w-px bg-slate-200" /> : null}
+              </div>
+              <div className={cn("pb-4", last && "pb-0")}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-slate-900">{item.label}</span>
+                  <span className={cn("rounded-md px-2 py-1 text-xs font-medium", tone.badge)}>{formatTimelineDate(item.value, item.type)}</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">{tone.note}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function getTimelineTone(task: Task, type: string) {
+  if (type === "completed") return { dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700", note: "任务已完成并进入结果确认。", done: true };
+  if (type === "due" && isOverdue(task)) return { dot: "bg-red-500", badge: "bg-red-50 text-red-700", note: "计划截止已过，需要尽快确认处理动作。", done: false };
+  if (type === "due" && isDueSoon(task)) return { dot: "bg-orange-500", badge: "bg-orange-50 text-orange-700", note: "任务即将到期，建议今日检查推进状态。", done: false };
+  if (type === "created") return { dot: "bg-blue-500", badge: "bg-blue-50 text-blue-700", note: "任务档案已进入项目任务池。", done: true };
+  if (type === "updated") return { dot: "bg-slate-500", badge: "bg-slate-100 text-slate-600", note: "最近一次任务信息更新记录。", done: false };
+  return { dot: "bg-slate-400", badge: "bg-slate-100 text-slate-600", note: "暂无异常状态。", done: false };
+}
+
+function formatTimelineDate(value?: string | null, type?: string) {
+  if (!value) return "未设置";
+  return type === "created" || type === "completed" || type === "updated" ? formatDateTime(value) : formatDate(value);
 }
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
