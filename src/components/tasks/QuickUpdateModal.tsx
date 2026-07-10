@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type React from "react";
 import { Button } from "@/components/ui/button";
 import { getTaskSaveErrorMessage } from "@/lib/task-errors";
@@ -32,6 +32,13 @@ export function QuickUpdateModal({
   const [form, setForm] = useState<QuickUpdateInput>(() => getInitialForm(task));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm(getInitialForm(task));
+    setError("");
+  }, [open, task]);
 
   if (!open || !task) return null;
 

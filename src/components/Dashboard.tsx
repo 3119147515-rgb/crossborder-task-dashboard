@@ -34,6 +34,7 @@ import type { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card, Badge } from "@/components/ui/surface";
 import { getSupabase } from "@/lib/supabase";
+import { withSupabaseTimeout } from "@/lib/supabase-timeout";
 import { formatDate, isCompleted, isDueSoon, isDueThisWeek, isOverdue } from "@/lib/date";
 import { getTaskSaveErrorMessage } from "@/lib/task-errors";
 import { createMemberMap, defaultTeamMembers, formatMemberName, getMembersByGroup } from "@/lib/team-members";
@@ -169,33 +170,49 @@ export function Dashboard({ session }: { session: Session }) {
   async function loadTasks() {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from("tasks").select("*").order("due_date", { ascending: true, nullsFirst: false });
+      const { data, error } = await withSupabaseTimeout(
+        supabase.from("tasks").select("*").order("due_date", { ascending: true, nullsFirst: false }),
+        "读取任务",
+      );
       if (error) {
         console.error("Load tasks failed", error);
         setNotice(`读取任务失败：${error.message}`);
         return;
       }
       setTasks((data || []) as Task[]);
+    } catch (error) {
+      console.error("Load tasks failed", error);
+      setNotice(getTaskSaveErrorMessage(error));
     } finally {
       setLoading(false);
     }
   }
 
   async function loadTeamMembers() {
-    const { data, error } = await supabase
-      .from("team_members")
-      .select("id, member_code, display_name, role_group, email, is_active, created_at, updated_at")
-      .order("role_group", { ascending: true })
-      .order("member_code", { ascending: true });
-    if (error) {
+    try {
+      const { data, error } = await withSupabaseTimeout(
+        supabase
+          .from("team_members")
+          .select("id, member_code, display_name, role_group, email, is_active, created_at, updated_at")
+          .order("role_group", { ascending: true })
+          .order("member_code", { ascending: true }),
+        "读取团队成员",
+      );
+      if (error) {
+        console.error("Load team members failed", error);
+        setTeamMembers(defaultTeamMembers);
+        setMembersReady(false);
+        if (error.code === "42P01") setNotice("团队成员表尚未创建，请执行 create-team-members.sql。");
+        return;
+      }
+      setTeamMembers(mergeTeamMembers((data || []) as TeamMember[]));
+      setMembersReady(true);
+    } catch (error) {
       console.error("Load team members failed", error);
       setTeamMembers(defaultTeamMembers);
       setMembersReady(false);
-      if (error.code === "42P01") setNotice("团队成员表尚未创建，请执行 create-team-members.sql。");
-      return;
+      setNotice(getTaskSaveErrorMessage(error));
     }
-    setTeamMembers(mergeTeamMembers((data || []) as TeamMember[]));
-    setMembersReady(true);
   }
 
   useEffect(() => {
@@ -261,13 +278,13 @@ export function Dashboard({ session }: { session: Session }) {
 
   async function saveTask(input: TaskInput) {
     if (editingTask) {
-      const { error } = await supabase.from("tasks").update(input).eq("id", editingTask.id);
+      const { error } = await withSupabaseTimeout(supabase.from("tasks").update(input).eq("id", editingTask.id), "保存任务");
       if (error) {
         console.error("Supabase task update failed", error);
         throw error;
       }
     } else {
-      const { error } = await supabase.from("tasks").insert(input);
+      const { error } = await withSupabaseTimeout(supabase.from("tasks").insert(input), "新增任务");
       if (error) {
         console.error("Supabase task insert failed", error);
         throw error;
@@ -279,7 +296,7 @@ export function Dashboard({ session }: { session: Session }) {
   }
 
   async function saveTeamMemberProfile(memberCode: string, patch: Pick<TeamMember, "display_name" | "email" | "is_active">) {
-    const { error } = await supabase.from("team_members").update(patch).eq("member_code", memberCode);
+    const { error } = await withSupabaseTimeout(supabase.from("team_members").update(patch).eq("member_code", memberCode), "保存成员资料");
     if (error) {
       console.error("Save team member failed", error);
       throw error;
@@ -297,7 +314,7 @@ export function Dashboard({ session }: { session: Session }) {
       next.completed_at = null;
     }
     setTasks((current) => current.map((item) => (item.id === task.id ? { ...item, ...next, updated_at: new Date().toISOString() } : item)));
-    const { error } = await supabase.from("tasks").update(next).eq("id", task.id);
+    const { error } = await withSupabaseTimeout(supabase.from("tasks").update(next).eq("id", task.id), "快速更新任务");
     if (error) {
       console.error("Supabase quick update failed", error);
       await loadTasks();
@@ -327,7 +344,7 @@ export function Dashboard({ session }: { session: Session }) {
 
   async function deleteTask(task: Task) {
     if (!window.confirm(`确认删除任务「${task.task_name}」吗？此操作不可撤销。`)) return;
-    const { error } = await supabase.from("tasks").delete().eq("id", task.id);
+    const { error } = await withSupabaseTimeout(supabase.from("tasks").delete().eq("id", task.id), "删除任务");
     if (error) console.error(error);
     if (selectedTask?.id === task.id) setSelectedTask(null);
     await loadTasks();
