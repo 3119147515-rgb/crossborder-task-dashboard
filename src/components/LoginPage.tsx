@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/surface";
 import { Input, Label } from "@/components/ui/form";
 import { getSupabase } from "@/lib/supabase";
+import { withSupabaseTimeout } from "@/lib/supabase-timeout";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
@@ -21,10 +22,10 @@ export function LoginPage() {
     try {
       const normalizedEmail = email.trim();
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        });
+        const { error } = await withSupabaseTimeout(
+          supabase.auth.signInWithPassword({ email: normalizedEmail, password }),
+          "登录",
+        );
         if (error) {
           setMessage(error.message);
           return;
@@ -33,10 +34,10 @@ export function LoginPage() {
         return;
       }
 
-      const { data, error } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password,
-      });
+      const { data, error } = await withSupabaseTimeout(
+        supabase.auth.signUp({ email: normalizedEmail, password }),
+        "注册",
+      );
       if (error) {
         setMessage(error.message);
         return;
@@ -47,6 +48,9 @@ export function LoginPage() {
       }
       setMode("login");
       setMessage("注册成功，请返回登录。");
+    } catch (error) {
+      console.error("Authentication request failed", error);
+      setMessage(error instanceof Error ? error.message : "请求失败，请检查网络后重试。");
     } finally {
       setLoading(false);
     }

@@ -7,7 +7,7 @@ import { formatMemberName } from "@/lib/team-members";
 import { cn } from "@/lib/utils";
 import type { Task, TeamMember } from "@/types/task";
 import { BusinessModuleBadge, OverdueBadge, PlatformBadge, PriorityBadge, RiskBadge, StageBadge, StatusBadge } from "./badges";
-import { ProgressBar } from "./ProgressBar";
+import { ProgressQuickControl } from "./ProgressQuickControl";
 
 export function TaskTable({
   tasks,
@@ -81,7 +81,7 @@ export function TaskTable({
                 <select
                   className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs outline-none focus:border-blue-400"
                   value={task.status}
-                  onChange={(event) => onQuickUpdate(task, { status: event.target.value as Task["status"], progress: event.target.value === "已完成" ? 100 : task.progress })}
+                  onChange={(event) => void onQuickUpdate(task, { status: event.target.value as Task["status"], progress: event.target.value === "已完成" ? 100 : task.progress }).catch(() => undefined)}
                 >
                   {["未开始", "进行中", "待确认", "已完成", "已暂停"].map((status) => <option key={status}>{status}</option>)}
                 </select>
@@ -89,15 +89,13 @@ export function TaskTable({
               </td>
               <td className="w-[110px] min-w-[110px] border-b border-slate-100 px-3 py-3"><RiskBadge task={task} /></td>
               <td className="w-[170px] min-w-[170px] border-b border-slate-100 px-3 py-3" onClick={(event) => event.stopPropagation()}>
-                <ProgressBar value={task.progress} />
-                <input
-                  aria-label="修改进度"
-                  className="mt-2 w-full accent-blue-600"
-                  type="range"
-                  min={0}
-                  max={100}
+                <ProgressQuickControl
+                  ariaLabel="修改进度"
                   value={task.progress}
-                  onChange={(event) => onQuickUpdate(task, { progress: Number(event.target.value), status: Number(event.target.value) === 100 ? "已完成" : task.status })}
+                  onCommit={(progress) => onQuickUpdate(task, {
+                    progress,
+                    status: progress === 100 ? "已完成" : task.status === "已完成" ? "进行中" : task.status,
+                  })}
                 />
               </td>
               <td className="w-[120px] min-w-[120px] border-b border-slate-100 px-3 py-3">

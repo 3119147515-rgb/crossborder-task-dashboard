@@ -5,6 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import { Dashboard } from "@/components/Dashboard";
 import { LoginPage } from "@/components/LoginPage";
 import { getSupabase } from "@/lib/supabase";
+import { withSupabaseTimeout } from "@/lib/supabase-timeout";
 import { LoadingState } from "@/components/tasks/states";
 
 export default function Home() {
@@ -13,12 +14,21 @@ export default function Home() {
 
   useEffect(() => {
     const supabase = getSupabase();
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setReady(true);
-    });
+    let active = true;
+    withSupabaseTimeout(supabase.auth.getSession(), "读取登录状态")
+      .then(({ data, error }) => {
+        if (error) throw error;
+        if (active) setSession(data.session);
+      })
+      .catch((error) => console.error("Load auth session failed", error))
+      .finally(() => {
+        if (active) setReady(true);
+      });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
-    return () => data.subscription.unsubscribe();
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
   }, []);
 
   if (!ready) return <LoadingState />;

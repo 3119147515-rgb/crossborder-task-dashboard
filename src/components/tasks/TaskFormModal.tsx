@@ -115,14 +115,17 @@ export function TaskFormModal({
     if (!form.due_date) return setError("请选择截止日期");
     const progress = Number(form.progress);
     if (Number.isNaN(progress) || progress < 0 || progress > 100) return setError("进度必须是 0 到 100");
+    const normalizedProgress = form.status === "已完成" ? 100 : progress;
+    const normalizedStatus = normalizedProgress === 100 ? "已完成" : form.status;
 
     setSaving(true);
     setError("");
     try {
       await onSubmit({
         ...form,
-        progress,
-        completed_at: form.status === "已完成" || progress === 100 ? form.completed_at || new Date().toISOString() : null,
+        status: normalizedStatus,
+        progress: normalizedProgress,
+        completed_at: normalizedStatus === "已完成" ? form.completed_at || new Date().toISOString() : null,
         description: form.description || null,
         latest_update: form.latest_update || null,
         blocker: form.blocker || null,

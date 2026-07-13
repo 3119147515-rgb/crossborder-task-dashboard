@@ -48,10 +48,11 @@ export function QuickUpdateModal({
     setSaving(true);
     setError("");
     try {
+      const normalizedProgress = form.status === "已完成" ? 100 : Number(form.progress);
       await onSubmit(task, {
         ...form,
-        progress: Number(form.progress),
-        status: Number(form.progress) === 100 ? "已完成" : form.status,
+        progress: normalizedProgress,
+        status: normalizedProgress === 100 ? "已完成" : form.status,
       });
       onClose();
     } catch (error) {

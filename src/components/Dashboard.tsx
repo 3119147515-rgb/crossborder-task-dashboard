@@ -277,35 +277,43 @@ export function Dashboard({ session }: { session: Session }) {
   }
 
   async function saveTask(input: TaskInput) {
-    if (editingTask) {
-      const { error } = await withSupabaseTimeout(supabase.from("tasks").update(input).eq("id", editingTask.id), "保存任务");
-      if (error) {
-        console.error("Supabase task update failed", error);
-        throw error;
-      }
-    } else {
-      const { error } = await withSupabaseTimeout(supabase.from("tasks").insert(input), "新增任务");
-      if (error) {
-        console.error("Supabase task insert failed", error);
-        throw error;
-      }
+    const currentEditingTask = editingTask;
+    const request = currentEditingTask
+      ? supabase.from("tasks").update(input).eq("id", currentEditingTask.id).select("*").single()
+      : supabase.from("tasks").insert(input).select("*").single();
+    const { data, error } = await withSupabaseTimeout(request, currentEditingTask ? "保存任务" : "新增任务");
+    if (error || !data) {
+      const saveError = error || new Error("Supabase 未返回已保存的任务，请检查 RLS 更新策略。");
+      console.error(currentEditingTask ? "Supabase task update failed" : "Supabase task insert failed", saveError);
+      throw saveError;
     }
+
+    const savedTask = data as Task;
+    setTasks((current) => currentEditingTask
+      ? current.map((task) => (task.id === savedTask.id ? savedTask : task))
+      : [...current, savedTask]);
+    setSelectedTask((current) => current?.id === savedTask.id ? savedTask : current);
     setModalOpen(false);
-    await loadTasks();
-    setNotice(editingTask ? "任务已保存" : "任务已新增");
+    setEditingTask(null);
+    setNotice(currentEditingTask ? "任务已保存" : "任务已新增");
   }
 
   async function saveTeamMemberProfile(memberCode: string, patch: Pick<TeamMember, "display_name" | "email" | "is_active">) {
-    const { error } = await withSupabaseTimeout(supabase.from("team_members").update(patch).eq("member_code", memberCode), "保存成员资料");
-    if (error) {
-      console.error("Save team member failed", error);
-      throw error;
+    const { data, error } = await withSupabaseTimeout(
+      supabase.from("team_members").update(patch).eq("member_code", memberCode).select("id, member_code, display_name, role_group, email, is_active, created_at, updated_at").single(),
+      "保存成员资料",
+    );
+    if (error || !data) {
+      const saveError = error || new Error("Supabase 未返回已保存的成员，请检查 RLS 更新策略。");
+      console.error("Save team member failed", saveError);
+      throw saveError;
     }
-    await loadTeamMembers();
+    const savedMember = data as TeamMember;
+    setTeamMembers((current) => mergeTeamMembers(current.map((member) => member.member_code === memberCode ? savedMember : member)));
     setNotice("成员资料已保存");
   }
 
-  async function quickUpdate(task: Task, patch: Partial<Task>, options: { throwOnError?: boolean } = {}) {
+  async function quickUpdate(task: Task, patch: Partial<Task>) {
     const next = { ...patch };
     if (patch.status === "已完成" || patch.progress === 100) {
       next.completed_at = task.completed_at || new Date().toISOString();
@@ -313,19 +321,23 @@ export function Dashboard({ session }: { session: Session }) {
     if (patch.status && patch.status !== "已完成" && patch.progress !== 100) {
       next.completed_at = null;
     }
-    setTasks((current) => current.map((item) => (item.id === task.id ? { ...item, ...next, updated_at: new Date().toISOString() } : item)));
-    const { error } = await withSupabaseTimeout(supabase.from("tasks").update(next).eq("id", task.id), "快速更新任务");
-    if (error) {
-      console.error("Supabase quick update failed", error);
-      await loadTasks();
-      setNotice(getTaskSaveErrorMessage(error));
-      if (options.throwOnError) throw error;
+    const { data, error } = await withSupabaseTimeout(
+      supabase.from("tasks").update(next).eq("id", task.id).select("*").single(),
+      "快速更新任务",
+    );
+    if (error || !data) {
+      const saveError = error || new Error("Supabase 未返回已更新的任务，请检查 RLS 更新策略。");
+      console.error("Supabase quick update failed", saveError);
+      setNotice(getTaskSaveErrorMessage(saveError));
+      throw saveError;
     }
+    const savedTask = data as Task;
+    setTasks((current) => current.map((item) => (item.id === savedTask.id ? savedTask : item)));
+    setSelectedTask((current) => current?.id === savedTask.id ? savedTask : current);
   }
 
   async function saveQuickUpdate(task: Task, input: QuickUpdateInput) {
-    await quickUpdate(task, input, { throwOnError: true });
-    await loadTasks();
+    await quickUpdate(task, input);
     setNotice("快速更新已保存");
   }
 
@@ -333,8 +345,7 @@ export function Dashboard({ session }: { session: Session }) {
     if (isCompleted(task)) return;
     if (!window.confirm("确认将该任务标记为已完成吗？")) return;
     try {
-      await quickUpdate(task, { status: "已完成", progress: 100, completed_at: new Date().toISOString() }, { throwOnError: true });
-      await loadTasks();
+      await quickUpdate(task, { status: "已完成", progress: 100, completed_at: new Date().toISOString() });
       setNotice("任务已标记完成");
     } catch (error) {
       console.error("Complete task failed", error);
@@ -344,10 +355,19 @@ export function Dashboard({ session }: { session: Session }) {
 
   async function deleteTask(task: Task) {
     if (!window.confirm(`确认删除任务「${task.task_name}」吗？此操作不可撤销。`)) return;
-    const { error } = await withSupabaseTimeout(supabase.from("tasks").delete().eq("id", task.id), "删除任务");
-    if (error) console.error(error);
-    if (selectedTask?.id === task.id) setSelectedTask(null);
-    await loadTasks();
+    try {
+      const { data, error } = await withSupabaseTimeout(
+        supabase.from("tasks").delete().eq("id", task.id).select("id").single(),
+        "删除任务",
+      );
+      if (error || !data) throw error || new Error("Supabase 未返回已删除的任务，请检查 RLS 删除策略。");
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      if (selectedTask?.id === task.id) setSelectedTask(null);
+      setNotice("任务已删除");
+    } catch (error) {
+      console.error("Delete task failed", error);
+      setNotice(getTaskSaveErrorMessage(error));
+    }
   }
 
   function selectNav(key: NavKey) {
@@ -552,7 +572,10 @@ export function Dashboard({ session }: { session: Session }) {
       <QuickUpdateModal key={quickEditingTask?.id || "quick-update"} task={quickEditingTask} open={Boolean(quickEditingTask)} onClose={() => setQuickEditingTask(null)} onSubmit={saveQuickUpdate} />
       <TaskFormModal open={modalOpen} task={editingTask} defaultPlatform={defaultPlatform} onClose={() => setModalOpen(false)} onSubmit={saveTask} memberMap={memberMap} />
       {notice ? (
-        <div className="fixed bottom-5 right-5 z-[70] rounded-lg border border-emerald-200 bg-white px-4 py-3 text-sm font-medium text-emerald-700 shadow-xl">
+        <div className={cn(
+          "fixed bottom-5 right-5 z-[70] max-w-[min(420px,calc(100vw-2.5rem))] rounded-lg border bg-white px-4 py-3 text-sm font-medium shadow-xl",
+          /失败|超时|尚未|错误/.test(notice) ? "border-red-200 text-red-700" : "border-emerald-200 text-emerald-700",
+        )}>
           {notice}
         </div>
       ) : null}

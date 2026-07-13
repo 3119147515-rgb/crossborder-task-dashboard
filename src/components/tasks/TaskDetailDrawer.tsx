@@ -8,7 +8,7 @@ import { formatMemberName } from "@/lib/team-members";
 import { cn } from "@/lib/utils";
 import type { Task, TeamMember } from "@/types/task";
 import { BusinessModuleBadge, OverdueBadge, PlatformBadge, PriorityBadge, RiskBadge, StageBadge, StatusBadge } from "./badges";
-import { ProgressBar } from "./ProgressBar";
+import { ProgressQuickControl } from "./ProgressQuickControl";
 
 export function TaskDetailDrawer({
   task,
@@ -70,15 +70,13 @@ export function TaskDetailDrawer({
               <span className={cn("text-sm font-medium", isOverdue(task) && "text-red-600", isDueSoon(task) && "text-amber-600")}>截止 {formatDate(task.due_date)}</span>
             </div>
             <div className="mt-4">
-              <ProgressBar value={task.progress} />
-              <input
-                aria-label="更新进度"
-                className="mt-3 w-full accent-blue-600"
-                min={0}
-                max={100}
-                type="range"
+              <ProgressQuickControl
+                ariaLabel="更新进度"
                 value={task.progress}
-                onChange={(event) => onQuickUpdate(task, { progress: Number(event.target.value), status: Number(event.target.value) === 100 ? "已完成" : task.status })}
+                onCommit={(progress) => onQuickUpdate(task, {
+                  progress,
+                  status: progress === 100 ? "已完成" : task.status === "已完成" ? "进行中" : task.status,
+                })}
               />
             </div>
           </section>
