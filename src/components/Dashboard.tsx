@@ -50,8 +50,9 @@ import { TaskDetailDrawer } from "./tasks/TaskDetailDrawer";
 import { TaskFormModal } from "./tasks/TaskFormModal";
 import { PlatformBadge, RiskBadge, StatusBadge } from "./tasks/badges";
 import { EmptyState, LoadingState } from "./tasks/states";
+import { BdReportsPage } from "./bd-reports/BdReportsPage";
 
-type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review" | "team" | "help";
+type NavKey = "overview" | "today" | "TikTok" | "Amazon" | "独立站" | "owners" | "blockers" | "overdue" | "review" | "bdReports" | "team" | "help";
 type ExecutionView = "platform" | "role" | "status" | "priority";
 type QuickFilter = "today" | "overdue" | "blocker" | "high" | "week" | "pending" | "tiktokOps" | "amazonOps" | "bd" | "product" | "editing" | null;
 type NotificationType = "overdue" | "blocker" | "week" | "high";
@@ -67,6 +68,7 @@ const sidebarItems: Array<{ key: NavKey; label: string; icon: typeof LayoutDashb
   { key: "blockers", label: "卡点任务", icon: AlertTriangle },
   { key: "overdue", label: "逾期任务", icon: Clock3 },
   { key: "review", label: "数据复盘", icon: PieChart },
+  { key: "bdReports", label: "BD 报表", icon: BarChart3 },
   { key: "team", label: "团队成员", icon: UserRound },
   { key: "help", label: "使用说明", icon: BookOpen },
 ];
@@ -75,7 +77,7 @@ const sidebarGroups: Array<{ title: string; items: typeof sidebarItems }> = [
   { title: "工作台", items: sidebarItems.filter((item) => item.key === "overview" || item.key === "today") },
   { title: "平台", items: sidebarItems.filter((item) => item.key === "TikTok" || item.key === "Amazon" || item.key === "独立站") },
   { title: "协作", items: sidebarItems.filter((item) => item.key === "owners" || item.key === "blockers" || item.key === "overdue") },
-  { title: "分析", items: sidebarItems.filter((item) => item.key === "review") },
+  { title: "分析", items: sidebarItems.filter((item) => item.key === "review" || item.key === "bdReports") },
   { title: "帮助", items: sidebarItems.filter((item) => item.key === "team" || item.key === "help") },
 ];
 
@@ -124,6 +126,11 @@ const viewCopy: Record<NavKey, { title: string; eyebrow: string; description: st
     title: "数据复盘",
     eyebrow: "Review desk",
     description: "聚合数据复盘、内容复盘、效果复盘相关任务，沉淀平台推进结论。",
+  },
+  bdReports: {
+    title: "BD 日报与月报",
+    eyebrow: "BD reporting",
+    description: "统一记录 BD 每日业务动作，自动形成月度成员汇总、趋势和任务协同视图。",
   },
   help: {
     title: "使用说明",
@@ -426,6 +433,7 @@ export function Dashboard({ session }: { session: Session }) {
   const isPlatformView = isPlatformNav(activeNav);
   const showHelp = activeNav === "help";
   const showTeam = activeNav === "team";
+  const showBdReports = activeNav === "bdReports";
   const scopedTasks = isPlatformView ? tasks.filter((task) => task.platform === activeNav) : filteredTasks;
   const activeViewMetrics = createMetrics(filteredTasks);
   const showOverview = activeNav === "overview" && !showHelp && !showTeam;
@@ -455,6 +463,7 @@ export function Dashboard({ session }: { session: Session }) {
 
           {showHelp ? <HelpGuide /> : null}
           {showTeam ? <TeamMembersPage members={teamMembers} membersReady={membersReady} onSave={saveTeamMemberProfile} /> : null}
+          {showBdReports ? <BdReportsPage teamMembers={teamMembers} tasks={tasks} /> : null}
 
           {showOverview ? (
             <>
@@ -489,7 +498,7 @@ export function Dashboard({ session }: { session: Session }) {
             </section>
           ) : null}
 
-          {!showHelp && !showTeam ? <Card className="overflow-hidden border-slate-200 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+          {!showHelp && !showTeam && !showBdReports ? <Card className="overflow-hidden border-slate-200 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
             <div className="border-b border-slate-200 bg-white px-4 py-4 lg:px-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
